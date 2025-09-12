@@ -10,16 +10,19 @@ st.set_page_config(page_title="Generador de PDI", page_icon="📄", layout="cent
 st.title("📄 Generador de Planes de Desarrollo Individual (PDI)")
 st.write("Esta aplicación genera un PDI en PDF a partir de los datos de una hoja de cálculo de Google.")
 
-# --- CONEXIÓN SEGURA CON GOOGLE SHEETS ---
+# --- CONEXIÓN SEGURA CON GOOGLE SHEETS (VERSIÓN ACTUALIZADA) ---
 @st.cache_resource
 def conectar_google_sheets():
     try:
         scopes = ["https://spreadsheets.google.com/feeds", 'https://www.googleapis.com/auth/spreadsheets', "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
-        if "gcp_service_account" in st.secrets:
-            creds_dict = st.secrets["gcp_service_account"]
+        
+        # CAMBIO CLAVE: Leemos el JSON desde un string simple en los secretos
+        if "google_creds_json" in st.secrets:
+            creds_dict = json.loads(st.secrets["google_creds_json"])
         else:
             with open("credentials.json", "r") as f:
                 creds_dict = json.load(f)
+
         creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
         client = gspread.authorize(creds)
         return client
@@ -32,7 +35,6 @@ def conectar_google_sheets():
 
 # --- GENERACIÓN DE PDF (Sin cambios) ---
 def generar_pdf(datos_empleado):
-    # Esta función es idéntica a la anterior, no la modificamos.
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=10)
@@ -60,7 +62,7 @@ def generar_pdf(datos_empleado):
     agregar_seccion("6. Proyección y Crecimiento", {"Desea recibir asesoramiento": "¿Le gustaría recibir asesoramiento sobre su plan de desarrollo profesional dentro de la empresa?", "Dispuesto a nuevos desafíos": "¿Estaría dispuesto a asumir nuevas responsabilidades o desafíos para avanzar en su carrera dentro de la empresa?", "Comentarios adicionales": "Si desea agregar algún comentario sobre su desarrollo profesional en la empresa, puede hacerlo aquí:"})
     return pdf.output(dest='S').encode('latin-1')
 
-# --- INTERFAZ DE STREAMLIT (CON DETECTOR DE ERRORES MEJORADO) ---
+# --- INTERFAZ DE STREAMLIT (Sin cambios) ---
 url_google_sheet = st.text_input(
     "Ingresa la URL de tu Hoja de Cálculo de Google:",
     "https://docs.google.com/spreadsheets/d/1Uo5qFK34s94xGLO6WF3QuBGRLZi7XDYxcYVGZx79z_M/edit?usp=sharing"
@@ -80,23 +82,27 @@ if url_google_sheet:
             else:
                 df = pd.DataFrame(all_values[1:], columns=all_values[0])
                 st.success("¡Datos cargados correctamente! ✅")
+
                 columna_nombre = "Apellido y Nombre"
                 if columna_nombre in df.columns:
                     empleados = df[columna_nombre].dropna().unique()
                     empleado_seleccionado = st.selectbox("Selecciona un empleado:", empleados)
+
                     if empleado_seleccionado:
                         datos_empleado = df[df[columna_nombre] == empleado_seleccionado].iloc[0].to_dict()
                         if st.button(f"Generar PDF para {empleado_seleccionado}"):
                             pdf_bytes = generar_pdf(datos_empleado)
-                            st.download_button(label="📥 Descargar PDF", data=pdf_bytes, file_name=f"PDI_{empleado_seleccionado.replace(' ', '_')}.pdf", mime="application/octet-stream")
+                            st.download_button(
+                                label="📥 Descargar PDF",
+                                data=pdf_bytes,
+                                file_name=f"PDI_{empleado_seleccionado.replace(' ', '_')}.pdf",
+                                mime="application/octet-stream"
+                            )
                 else:
                     st.error(f"Error: No se encontró la columna '{columna_nombre}' en la hoja.")
                     st.write("Columnas encontradas:", df.columns.tolist())
 
         except gspread.exceptions.WorksheetNotFound:
-            st.error(f"Error Crítico: No se encontró la pestaña llamada '{nombre_de_la_hoja}'. Revisa el nombre en tu Google Sheet y asegúrate de que sea exacto.")
+            st.error(f"No se encontró la pestaña llamada '{nombre_de_la_hoja}'. Revisa el nombre en tu Google Sheet.")
         except Exception as e:
-            # **CAMBIO CLAVE**: Mostramos el error real
-            st.error("Ocurrió un error inesperado. Aquí está el detalle técnico:")
-            st.code(f"Tipo de error: {type(e).__name__}\nMensaje: {e}")
-            st.info("Por favor, copia este mensaje de error técnico y envíamelo. Esto nos dirá exactamente qué está pasando.")
+            st.error(f"Ocurrió un error inesperado al procesar la hoja: {e}")
