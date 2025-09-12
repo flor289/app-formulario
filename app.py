@@ -139,7 +139,9 @@ if url_google_sheet:
     client = conectar_google_sheets()
     if client:
         try:
-            sheet = client.open_by_url(url_google_sheet).sheet1
+            # REEMPLAZA LA LÍNEA ANTERIOR POR ESTA
+            nombre_de_la_hoja = "Respuestas de formulario 1"  # <-- ¡CAMBIA ESTO!
+            sheet = client.open_by_url(url_google_sheet).worksheet(nombre_de_la_hoja)
             datos = sheet.get_all_records()
             df = pd.DataFrame(datos)
 
@@ -170,4 +172,5 @@ if url_google_sheet:
         except gspread.exceptions.SpreadsheetNotFound:
             st.error("No se encontró la hoja de cálculo. Verifica la URL y asegúrate de haberla compartido con el correo de la cuenta de servicio.")
         except Exception as e:
+
             st.error(f"Ocurrió un error inesperado: {e}")
