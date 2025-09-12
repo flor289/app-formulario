@@ -10,24 +10,32 @@ st.set_page_config(page_title="Generador de PDI", page_icon="📄", layout="cent
 st.title("📄 Generador de Planes de Desarrollo Individual (PDI)")
 st.write("Esta aplicación genera un PDI en PDF a partir de los datos de una hoja de cálculo de Google.")
 
-# --- CONEXIÓN SEGURA CON GOOGLE SHEETS (VERSIÓN ACTUALIZADA) ---
+# --- CONEXIÓN SEGURA CON GOOGLE SHEETS (VERSIÓN DEFINITIVA A PRUEBA DE ERRORES) ---
 @st.cache_resource
 def conectar_google_sheets():
     try:
         scopes = ["https://spreadsheets.google.com/feeds", 'https://www.googleapis.com/auth/spreadsheets', "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
         
-        # CAMBIO CLAVE: Leemos el JSON desde un string simple en los secretos
         if "google_creds_json" in st.secrets:
-            creds_dict = json.loads(st.secrets["google_creds_json"])
+            # Lee el secreto como un string
+            creds_str = st.secrets["google_creds_json"]
+            # Carga el string como un diccionario JSON
+            creds_dict = json.loads(creds_str)
         else:
+            # Lógica para ejecutarlo localmente
             with open("credentials.json", "r") as f:
                 creds_dict = json.load(f)
 
+        # Crea las credenciales a partir del diccionario
         creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
         client = gspread.authorize(creds)
         return client
     except FileNotFoundError:
         st.error("No se encontró el archivo 'credentials.json'. Asegúrate de que esté en la misma carpeta que app.py.")
+        return None
+    except json.JSONDecodeError as e:
+        st.error(f"Error Crítico al leer las credenciales: {e}")
+        st.error("Esto usualmente significa que hubo un error al copiar y pegar el contenido de credentials.json en los secretos de Streamlit. Por favor, revísalo.")
         return None
     except Exception as e:
         st.error(f"Error de conexión con Google Sheets: {e}")
