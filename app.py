@@ -18,7 +18,6 @@ st.title("✅ Generador de PDI (Versión Final)")
 st.write("Esta aplicación genera un PDI en PDF a partir de un archivo Excel que subas.")
 
 # --- ESTRUCTURA DE DATOS (CON LOS NOMBRES 100% CORRECTOS DE TU EXCEL) ---
-# Hecho a medida con la información de tu archivo
 SECCIONES_PDI = {
     "1. Datos Personales y Laborales": {
         "Apellido y Nombre": {'col': "Apellido y Nombre"}, "DNI": {'col': "DNI"}, "Correo electrónico": {'col': "Correo electrónico"},
