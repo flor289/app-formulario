@@ -10,17 +10,15 @@ st.write("Esta aplicación genera un PDI en PDF a partir de un archivo Excel que
 # --- CARGADOR DE ARCHIVO EXCEL ---
 uploaded_file = st.file_uploader(
     "Sube tu archivo Excel con los datos de los empleados",
-    type=["xlsx"] # Acepta solo archivos .xlsx
+    type=["xlsx"]
 )
 
-# El resto de la app solo se ejecuta si se ha subido un archivo
 if uploaded_file is not None:
     try:
-        # Lee los datos del archivo Excel subido
         df = pd.read_excel(uploaded_file)
         st.success("¡Archivo Excel cargado correctamente! ✅")
 
-        # --- GENERACIÓN DE PDF (Esta función no necesita cambios) ---
+        # --- GENERACIÓN DE PDF (VERSIÓN CORREGIDA Y ROBUSTA) ---
         def generar_pdf(datos_empleado):
             pdf = FPDF()
             pdf.add_page()
@@ -31,10 +29,12 @@ if uploaded_file is not None:
 
             def agregar_campo(etiqueta, valor_columna):
                 pdf.set_font("Arial", 'B', 10)
-                pdf.multi_cell(0, 6, f"{etiqueta}:", 0, 'L')
+                # CAMBIO CLAVE: El ancho (w=0) hace que la celda ocupe todo el ancho de la página.
+                pdf.multi_cell(w=0, h=6, txt=f"{etiqueta}:", border=0, align='L')
                 pdf.set_font("Arial", '', 10)
                 valor = str(datos_empleado.get(valor_columna, 'N/A'))
-                pdf.multi_cell(0, 6, valor, 0, 'L')
+                # CAMBIO CLAVE: El ancho (w=0) también aquí.
+                pdf.multi_cell(w=0, h=6, txt=valor, border=0, align='L')
                 pdf.ln(2)
 
             def agregar_seccion(titulo, campos):
@@ -44,7 +44,6 @@ if uploaded_file is not None:
                     agregar_campo(etiqueta, columna)
                 pdf.ln(5)
             
-            # Asegúrate que los nombres de las columnas aquí coincidan con tu Excel
             agregar_seccion("1. Datos Personales y Laborales", {"Apellido y Nombre": "Apellido y Nombre", "DNI": "DNI", "Correo electrónico": "Correo electrónico", "Número de contacto": "Número de contacto", "Edad": "Edad", "Posición actual": "Posición actual", "Fecha de ingreso": "Fecha de ingreso a la empresa", "Lugar de trabajo": "Lugar de trabajo"})
             agregar_seccion("2. Formación y Nivel Educativo", {"Nivel educativo": "Nivel educativo alcanzado", "Título obtenido": "Título obtenido (si corresponde)", "Otras capacitaciones": "Otras capacitaciones realizadas fuera de la empresa finalizadas (Mencionar)", "Puesto relacionado con formación": "Su puesto actual ¿está relacionado con su formación académica?"})
             agregar_seccion("3. Interés de Desarrollo", {"Interesado en desarrollar carrera": "¿Le interesaría desarrollar su carrera dentro de la empresa?", "Área de interés futura": "¿En qué área de la empresa le gustaría desarrollarse en el futuro?", "Puesto al que aspira": "¿Qué tipo de puesto aspira ocupar en el futuro?", "Motivaciones para cambiar": "¿Cuáles son los principales factores que lo motivarían en su decisión de cambiar de posición dentro de la empresa? (Seleccione hasta 3 opciones)"})
@@ -53,7 +52,7 @@ if uploaded_file is not None:
             agregar_seccion("6. Proyección y Crecimiento", {"Desea recibir asesoramiento": "¿Le gustaría recibir asesoramiento sobre su plan de desarrollo profesional dentro de la empresa?", "Dispuesto a nuevos desafíos": "¿Estaría dispuesto a asumir nuevos desafíos/responsabilidades?", "Comentarios adicionales": "Si desea agregar algún comentario sobre su desarrollo profesional en la empresa, puede hacerlo aquí:"})
             return pdf.output(dest='S').encode('latin-1')
 
-        # --- INTERFAZ PARA SELECCIONAR EMPLEADO Y GENERAR PDF ---
+        # --- INTERFAZ PARA SELECCIONAR EMPLEADO ---
         columna_nombre = "Apellido y Nombre"
         if columna_nombre in df.columns:
             empleados = df[columna_nombre].dropna().unique()
