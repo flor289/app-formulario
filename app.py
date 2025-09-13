@@ -1,75 +1,155 @@
 import streamlit as st
 import pandas as pd
+from io import BytesIO
+import zipfile
+
+# Importamos las librerías de reportlab
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, KeepTogether, PageBreak, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_JUSTIFY
+from reportlab.lib.units import inch
+from reportlab.pdfgen import canvas
 
 # --- CONFIGURACIÓN DE LA PÁGINA ---
-st.set_page_config(page_title="Diagnóstico de Columnas", page_icon="ախ", layout="centered")
-st.title("ախ Herramienta de Diagnóstico de Columnas")
-st.write("Esta herramienta te ayudará a identificar inconsistencias entre tu archivo Excel y el código.")
+st.set_page_config(page_title="Generador PDI Final", page_icon="✅", layout="centered")
+st.title("✅ Generador de PDI (Versión Final)")
+st.write("Esta aplicación genera un PDI en PDF a partir de un archivo Excel que subas.")
 
-# --- ESTRUCTURA DE DATOS (Columnas esperadas por el código) ---
-# Esta es la lista de nombres de columna que el programa necesita encontrar
-COLUMNAS_ESPERADAS = [
-    "Apellido y Nombre", "DNI", "Correo electrónico", "Número de contacto", "Edad", "Posición actual", 
-    "Fecha de ingreso a la empresa", "Lugar de trabajo", 
-    "Nivel educativo alcanzado", "Título obtenido (si corresponde)", 
-    "Otras capacitaciones realizadas fuera de la empresa finalizadas (Mencionar)",
-    "Su puesto actual ¿está relacionado con su formación académica?",
-    "Interés de desarrollo\n\n¿Le interesaría desarrollar su carrera dentro de la empresa?",
-    "¿En qué área de la empresa le gustaría desarrollarse en el futuro?",
-    "¿Cuáles son los principales factores que lo motivarían en su decisión de cambiar de posición  dentro de la empresa? (Seleccione hasta 3 opciones)",
-    "¿Qué tipo de puesto aspira ocupar en el futuro?",
-    "Capacitación y necesidades de aprendizaje\n¿En qué competencias o conocimientos le gustaría capacitarse para mejorar sus oportunidades de desarrollo? ",
-    "A partir de su respuesta anterior, por favor, especifique en qué competencia o conocimiento le gustaría capacitarse",
-    "Fortalezas y oportunidades de mejora\n¿Cuáles considera que son sus principales fortalezas profesionales? ",
-    "¿Qué obstáculos encuentra para su desarrollo profesional dentro de la empresa?",
-    "Proyección y crecimiento en la empresa\n¿Le gustaría recibir asesoramiento sobre su plan de desarrollo profesional dentro de la empresa? ",
-    "¿Estaría dispuesto a asumir nuevas responsabilidades o desafíos para avanzar en su carrera dentro de la empresa? ",
-    "Deje su comentario (opcional)\nSi desea agregar algún comentario sobre su desarrollo profesional en la empresa, puede hacerlo aquí:"
-]
+# --- ESTRUCTURA DE DATOS (CON LOS NOMBRES 100% CORRECTOS DE TU EXCEL) ---
+# Construido a partir de tu archivo de diagnóstico
+SECCIONES_PDI = {
+    "1. Datos Personales y Laborales": {
+        "Apellido y Nombre": {'col': "Apellido y Nombre"}, "DNI": {'col': "DNI"}, "Correo electrónico": {'col': "Correo electrónico"},
+        "Número de contacto": {'col': "Número de contacto"}, "Edad": {'col': "Edad"}, "Posición actual": {'col': "Posición actual"},
+        "Fecha de ingreso": {'col': "Fecha de ingreso a la empresa"}, "Lugar de trabajo": {'col': "Lugar de trabajo"}
+    },
+    "2. Formación y Nivel Educativo": {
+        "Nivel educativo": {'col': "Nivel educativo alcanzado"}, "Título obtenido": {'col': "Título obtenido (si corresponde)"},
+        "Otras capacitaciones": {'col': "Otras capacitaciones realizadas fuera de la empresa finalizadas (Mencionar)"},
+        "Relación entre puesto actual y formación académica": {'col': "Su puesto actual ¿está relacionado con su formación académica?", 'type': 'checkbox', 'options': ["Totalmente", "Parcialmente", "No"]}
+    },
+    "3. Interés de Desarrollo": {
+        "¿Le interesaría desarrollar su carrera dentro de la empresa?": {'col': 'Interés de desarrollo\n\n¿Le interesaría desarrollar su carrera dentro de la empresa?', 'type': 'checkbox', 'options': ["Sí", "No"]},
+        "Área de interés futura": {'col': "¿En qué área de la empresa le gustaría desarrollarse en el futuro?", 'type': 'list'},
+        "Puesto al que aspira": {'col': "¿Qué tipo de puesto aspira ocupar en el futuro?"},
+        "Motivaciones para cambiar": {'col': "¿Cuáles son los principales factores que lo motivarían en su decisión de cambiar de posición  dentro de la empresa? (Seleccione hasta 3 opciones)", 'type': 'list'}
+    },
+    "4. Necesidades de Capacitación": {
+        "Competencias a capacitar": {'col': "Capacitación y necesidades de aprendizaje\n¿En qué competencias o conocimientos le gustaría capacitarse para mejorar sus oportunidades de desarrollo? ", 'type': 'list'},
+        "Especificación de interés": {'col': "A partir de su respuesta anterior, por favor, especifique en qué competencia o conocimiento le gustaría capacitarse"}
+    },
+    "5. Fortalezas y Obstáculos": {
+        "Fortalezas profesionales": {'col': "Fortalezas y oportunidades de mejora\n¿Cuáles considera que son sus principales fortalezas profesionales? ", 'type': 'list'},
+        "Obstáculos para el desarrollo": {'col': "¿Qué obstáculos encuentra para su desarrollo profesional dentro de la empresa?", 'type': 'list'}
+    },
+    "6. Proyección y Crecimiento": {
+        "¿Le gustaría recibir asesoramiento sobre su plan de desarrollo profesional?": {'col': "Proyección y crecimiento en la empresa\n¿Le gustaría recibir asesoramiento sobre su plan de desarrollo profesional dentro de la empresa? ", 'type': 'checkbox', 'options': ["Sí", "No"]},
+        "¿Estaría dispuesto a asumir nuevos desafíos/responsabilidades?": {'col': "¿Estaría dispuesto a asumir nuevas responsabilidades o desafíos para avanzar en su carrera dentro de la empresa? ", 'type': 'checkbox', 'options': ["Sí", "No", "No lo sé"]},
+        "Comentarios adicionales": {'col': "Deje su comentario (opcional)\nSi desea agregar algún comentario sobre su desarrollo profesional en la empresa, puede hacerlo aquí:"}
+    }
+}
 
 # --- CARGADOR DE ARCHIVO EXCEL ---
 uploaded_file = st.file_uploader(
-    "Sube tu archivo Excel para iniciar el diagnóstico",
+    "Sube tu archivo Excel con los datos de los empleados",
     type=["xlsx"]
 )
 
 if uploaded_file is not None:
     try:
         df = pd.read_excel(uploaded_file)
-        st.success("¡Archivo Excel cargado! Iniciando comparación...")
-        st.divider()
+        # Limpiamos espacios en blanco al inicio/final de los nombres de columnas
+        df.columns = [col.strip() for col in df.columns]
+        st.success("¡Archivo Excel cargado correctamente! ✅")
 
-        # --- COMPARACIÓN DE COLUMNAS ---
-        columnas_excel = list(df.columns)
-        
-        # Creamos un DataFrame para la comparación visual
-        max_len = max(len(COLUMNAS_ESPERADAS), len(columnas_excel))
-        
-        # Rellenamos las listas para que tengan la misma longitud
-        esperadas_padded = COLUMNAS_ESPERADAS + [None] * (max_len - len(COLUMNAS_ESPERADAS))
-        excel_padded = columnas_excel + [None] * (max_len - len(columnas_excel))
-        
-        df_comparacion = pd.DataFrame({
-            'Nombres de Columna que el Código ESPERA': esperadas_padded,
-            'Nombres de Columna que tu Excel TIENE': excel_padded
-        })
+        # --- GENERACIÓN DE PDF ---
+        def generar_pdf(datos_empleado):
+            buffer = BytesIO()
+            doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=72, leftMargin=72, topMargin=72, bottomMargin=inch)
+            styles = getSampleStyleSheet()
+            color_azul, color_gris = colors.HexColor("#2a5caa"), colors.HexColor("#808080")
+            styles.add(ParagraphStyle(name='TituloPrincipal', parent=styles['h1'], textColor=color_azul, alignment=TA_CENTER, fontSize=18))
+            styles.add(ParagraphStyle(name='TituloSeccion', parent=styles['h2'], textColor=color_azul, spaceAfter=6))
+            styles.add(ParagraphStyle(name='NormalJustificado', parent=styles['Normal'], alignment=TA_JUSTIFY))
+            styles.add(ParagraphStyle(name='Etiqueta', parent=styles['Normal'], fontName='Helvetica-Bold'))
+            story = [Paragraph("PLAN DE DESARROLLO INDIVIDUAL (PDI)", styles['TituloPrincipal']), Spacer(1, 24)]
 
-        st.header("Resultado del Diagnóstico")
-        st.write("Compara las dos columnas. Si un nombre no es **idéntico** (incluyendo espacios, acentos y saltos de línea), el programa fallará.")
-        
-        # Mostramos la tabla de comparación
-        st.dataframe(df_comparacion, height=600)
+            def crear_checkbox(pregunta, opciones, respuesta):
+                marcado, no_marcado = "☒", "☐"
+                texto = f"<b>{pregunta}:</b><br/>"
+                lineas = [f"{marcado} <b>{op}</b>" if str(respuesta).strip().lower() == op.strip().lower() else f"<font color='{color_gris}'>{no_marcado} {op}</font>" for op in opciones]
+                texto += " &nbsp; ".join(lineas)
+                return Paragraph(texto, styles['Normal'])
 
-        # Verificación final
-        columnas_faltantes = [col for col in COLUMNAS_ESPERADAS if col.strip() not in [c.strip() for c in columnas_excel]]
+            def format_as_list(text):
+                if isinstance(text, str) and ',' in text: return "<br/>".join(f"- {item.strip()}" for item in text.split(','))
+                return text
 
-        if not columnas_faltantes:
-            st.success("¡PARECE QUE TODAS LAS COLUMNAS COINCIDEN! Si el error persiste, puede ser un problema de caché.")
+            def agregar_seccion(titulo, campos):
+                bloque = [Paragraph(titulo, styles['TituloSeccion']), Spacer(1, 6)]
+                for etiqueta, config in campos.items():
+                    # Usamos strip() en el nombre de la columna para eliminar espacios extra
+                    valor = str(datos_empleado.get(config['col'].strip(), 'N/A'))
+                    if config.get('type') == 'checkbox': bloque.append(crear_checkbox(etiqueta, config['options'], valor))
+                    elif config.get('type') == 'list': bloque.extend([Paragraph(f"<b>{etiqueta}:</b>", styles['Etiqueta']), Paragraph(format_as_list(valor), styles['NormalJustificado'])])
+                    else: bloque.extend([Paragraph(f"<b>{etiqueta}:</b>", styles['Etiqueta']), Paragraph(valor, styles['NormalJustificado'])])
+                    bloque.append(Spacer(1, 10))
+                story.append(KeepTogether(bloque))
+
+            for titulo, campos in SECCIONES_PDI.items():
+                agregar_seccion(titulo, campos)
+
+            story.append(PageBreak())
+            story.append(Paragraph("7. Síntesis de la entrevista", styles['TituloSeccion']))
+            story.append(Paragraph("(Para completar por el responsable de RRHH o desarrollo)", styles['Italic']))
+            story.extend([Spacer(1, 24), Paragraph("<b>Percepción del entrevistado:</b>", styles['Normal']), Spacer(1, 48), Paragraph("<b>Expectativas y motivaciones:</b>", styles['Normal']), Spacer(1, 48), Paragraph("<b>Potencial detectado:</b>", styles['Normal']), Spacer(1, 48), Spacer(1, 24)])
+            story.append(Paragraph("8. Plan de Acción", styles['TituloSeccion']))
+            story.append(Spacer(1, 12))
+            header_style = ParagraphStyle(name='HeaderStyle', parent=styles['Normal'], fontName='Helvetica-Bold', textColor=colors.whitesmoke, alignment=TA_CENTER)
+            headers = [Paragraph(h, header_style) for h in ["Objetivo de Desarrollo", "Acción a realizar", "Responsable", "Fecha de inicio", "Fecha de revisión", "Estado"]]
+            data_tabla = [headers] + [[""]*6 for _ in range(4)]
+            tabla = Table(data_tabla, colWidths=[1.5*inch, 1.5*inch, 1*inch, 1*inch, 1*inch, 1*inch])
+            tabla.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), color_azul), ('ALIGN', (0,0), (-1,-1), 'CENTER'), ('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('BOTTOMPADDING', (0,0), (-1,0), 12), ('TOPPADDING', (0,0), (-1,0), 6), ('BACKGROUND', (0,1), (-1,-1), colors.HexColor("#f0f0f0")), ('GRID', (0,0), (-1,-1), 1, colors.black), ('ROWHEIGHTS', (1, -1), [30] * 4)]))
+            story.append(tabla)
+            doc.build(story)
+            buffer.seek(0)
+            return buffer
+
+        # --- INTERFAZ PRINCIPAL ---
+        columna_nombre = "Apellido y Nombre"
+        if columna_nombre in df.columns:
+            st.header("Generar PDF Individual")
+            empleados = df[columna_nombre].dropna().unique()
+            empleado_seleccionado = st.selectbox("Selecciona un empleado:", empleados)
+            if empleado_seleccionado:
+                datos_empleado = df[df[columna_nombre] == empleado_seleccionado].iloc[0].to_dict()
+                if st.button(f"Generar PDF para {empleado_seleccionado}"):
+                    pdf_buffer = generar_pdf(datos_empleado)
+                    st.download_button(label="📥 Descargar PDF", data=pdf_buffer, file_name=f"PDI_{empleado_seleccionado.replace(' ', '_')}.pdf", mime="application/pdf")
+
+            st.divider()
+
+            st.header("Generar Todos los Formularios en un ZIP")
+            if st.button("🚀 Generar y Descargar ZIP con Todos los PDI"):
+                zip_buffer = BytesIO()
+                progress_bar = st.progress(0, text="Iniciando generación de PDFs...")
+                total_empleados = len(df)
+                with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                    for index, row in df.iterrows():
+                        nombre_empleado_raw = row.get(columna_nombre, f"Empleado_{index+1}")
+                        pdf_buffer = generar_pdf(row.to_dict())
+                        nombre_archivo = f"PDI_{str(nombre_empleado_raw).replace(' ', '_').replace(',', '')}.pdf"
+                        zipf.writestr(nombre_archivo, pdf_buffer.getvalue())
+                        progreso_actual = (index + 1) / total_empleados
+                        progress_bar.progress(progreso_actual, text=f"Generando PDF: {nombre_empleado_raw} ({index+1}/{total_empleados})")
+                progress_bar.empty()
+                st.download_button(label="📥 Descargar Archivo ZIP", data=zip_buffer.getvalue(), file_name="Todos_los_PDI.zip", mime="application/zip")
         else:
-            st.error("SE ENCONTRARON DIFERENCIAS. Las siguientes columnas esperadas no se encontraron:")
-            st.dataframe(pd.DataFrame(columnas_faltantes, columns=["Columnas con problemas"]))
-            st.warning("Por favor, copia la tabla de arriba o los nombres de la columna '...que tu Excel TIENE' y envíamelos para la corrección final.")
+            st.error(f"Error Crítico: No se encontró la columna '{columna_nombre}' en tu archivo Excel.")
+            st.write("Asegúrate de que tu Excel tenga una columna con ese nombre exacto.")
 
     except Exception as e:
-        st.error(f"Ocurrió un error al leer el archivo Excel: {e}")
+        st.error(f"Ocurrió un error inesperado: {e}")
 
