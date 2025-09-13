@@ -58,10 +58,9 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file is not None:
     try:
-        # Renombramos las columnas del DataFrame para simplificar el acceso
         df = pd.read_excel(uploaded_file)
-        df.columns = [col.strip() for col in df.columns] # Limpiamos espacios extra
-
+        # Limpiamos espacios en blanco al inicio/final de los nombres de columnas
+        df.columns = [col.strip() for col in df.columns] 
         st.success("¡Archivo Excel cargado correctamente! ✅")
 
         # --- GENERACIÓN DE PDF ---
@@ -89,6 +88,7 @@ if uploaded_file is not None:
 
             def agregar_seccion(titulo, campos):
                 bloque = [Paragraph(titulo, styles['TituloSeccion']), Spacer(1, 6)]
+                # Bucle seguro que NO causa el error "too many values to unpack"
                 for etiqueta, config in campos.items():
                     valor = str(datos_empleado.get(config['col'].strip(), 'N/A'))
                     if config.get('type') == 'checkbox': bloque.append(crear_checkbox(etiqueta, config['options'], valor))
@@ -151,4 +151,3 @@ if uploaded_file is not None:
 
     except Exception as e:
         st.error(f"Ocurrió un error inesperado: {e}")
-
