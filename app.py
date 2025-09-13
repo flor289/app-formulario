@@ -18,7 +18,6 @@ st.title("✅ Generador de PDI (Versión Final)")
 st.write("Esta aplicación genera un PDI en PDF a partir de un archivo Excel que subas.")
 
 # --- ESTRUCTURA DE DATOS (CON LOS NOMBRES 100% CORRECTOS DE TU EXCEL) ---
-# Construido a partir de tu archivo de diagnóstico
 SECCIONES_PDI = {
     "1. Datos Personales y Laborales": {
         "Apellido y Nombre": {'col': "Apellido y Nombre"}, "DNI": {'col': "DNI"}, "Correo electrónico": {'col': "Correo electrónico"},
@@ -89,8 +88,8 @@ if uploaded_file is not None:
 
             def agregar_seccion(titulo, campos):
                 bloque = [Paragraph(titulo, styles['TituloSeccion']), Spacer(1, 6)]
+                # Bucle seguro que NO causa el error "too many values to unpack"
                 for etiqueta, config in campos.items():
-                    # Usamos strip() en el nombre de la columna para eliminar espacios extra
                     valor = str(datos_empleado.get(config['col'].strip(), 'N/A'))
                     if config.get('type') == 'checkbox': bloque.append(crear_checkbox(etiqueta, config['options'], valor))
                     elif config.get('type') == 'list': bloque.extend([Paragraph(f"<b>{etiqueta}:</b>", styles['Etiqueta']), Paragraph(format_as_list(valor), styles['NormalJustificado'])])
