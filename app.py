@@ -9,6 +9,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT, TA_CENTER
 from reportlab.lib.units import inch
+from reportlab.pdfgen import canvas # <-- ¡ESTA ES LA LÍNEA QUE FALTABA!
 
 # --- CONFIGURACIÓN DE LA PÁGINA ---
 st.set_page_config(page_title="Generador de PDI", page_icon="📄", layout="centered")
@@ -141,7 +142,7 @@ if uploaded_file is not None:
             tabla.setStyle(estilo_tabla)
             story.append(tabla)
             
-            doc.build(story)
+            doc.build(story, canvasmaker=PieDePaginaCanvas)
             buffer.seek(0)
             return buffer
 
@@ -168,3 +169,4 @@ if uploaded_file is not None:
     except Exception as e:
         st.error(f"Ocurrió un error al procesar el archivo Excel: {e}")
         st.error("Sugerencia: Revisa que los nombres de las columnas en tu Excel coincidan con los del código.")
+
