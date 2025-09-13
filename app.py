@@ -13,12 +13,11 @@ from reportlab.lib.units import inch
 from reportlab.pdfgen import canvas
 
 # --- CONFIGURACIÓN DE LA PÁGINA ---
-st.set_page_config(page_title="Generador de PDI v2.0", page_icon="ախ", layout="centered")
-st.title("📄 Generador de PDI v2.0 (con Diagnóstico)")
+st.set_page_config(page_title="Generador de PDI v3.0", page_icon="✅", layout="centered")
+st.title("📄 Generador de PDI v3.0 (Final)")
 st.write("Esta aplicación genera un PDI en PDF a partir de un archivo Excel que subas.")
 
-# --- ESTRUCTURA DE DATOS (Columnas esperadas por el código) ---
-# Definimos la estructura aquí para poder verificarla
+# --- ESTRUCTURA DE DATOS (NOMBRES DE COLUMNA CORREGIDOS) ---
 SECCIONES_PDI = {
     "1. Datos Personales y Laborales": {
         "Apellido y Nombre": {'col': "Apellido y Nombre"}, "DNI": {'col': "DNI"}, "Correo electrónico": {'col': "Correo electrónico"},
@@ -62,26 +61,8 @@ if uploaded_file is not None:
         df = pd.read_excel(uploaded_file)
         st.success("¡Archivo Excel cargado correctamente! ✅")
 
-        # --- HERRAMIENTA DE DIAGNÓSTICO ---
-        st.divider()
-        st.header("Herramienta de Diagnóstico")
-        if st.button("🔍 Verificar Nombres de Columnas"):
-            columnas_requeridas = {config['col'] for seccion in SECCIONES_PDI.values() for config in seccion.values()}
-            columnas_excel = set(df.columns)
-            columnas_faltantes = columnas_requeridas - columnas_excel
-
-            if not columnas_faltantes:
-                st.success("¡Verificación Exitosa! Todas las columnas necesarias están presentes en tu archivo Excel.")
-            else:
-                st.error("¡Atención! Faltan las siguientes columnas en tu archivo Excel:")
-                for col in sorted(list(columnas_faltantes)):
-                    st.code(col)
-                st.warning("El programa fallará si estas columnas no existen. Por favor, renómbralas en tu Excel para que coincidan exactamente.")
-        st.divider()
-
         # --- GENERACIÓN DE PDF ---
         def generar_pdf(datos_empleado):
-            # (El código de esta función es idéntico al de la respuesta anterior, no ha cambiado)
             buffer = BytesIO()
             doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=72, leftMargin=72, topMargin=72, bottomMargin=inch)
             styles = getSampleStyleSheet()
@@ -162,5 +143,4 @@ if uploaded_file is not None:
 
     except Exception as e:
         st.error(f"Ocurrió un error inesperado: {e}")
-        st.error("Sugerencia: Usa el botón 'Verificar Nombres de Columnas' para ver si hay algún problema con tu archivo Excel.")
 
