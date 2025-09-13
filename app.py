@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from fpdf import FPDF
+import textwrap # Importamos una librería para manejar texto
 
 # --- CONFIGURACIÓN DE LA PÁGINA ---
 st.set_page_config(page_title="Generador de PDI", page_icon="📄", layout="centered")
@@ -18,23 +19,33 @@ if uploaded_file is not None:
         df = pd.read_excel(uploaded_file)
         st.success("¡Archivo Excel cargado correctamente! ✅")
 
-        # --- GENERACIÓN DE PDF (VERSIÓN CORREGIDA Y ROBUSTA) ---
+        # --- GENERACIÓN DE PDF (VERSIÓN FINAL CON "ROMPE-PALABRAS") ---
         def generar_pdf(datos_empleado):
             pdf = FPDF()
             pdf.add_page()
             pdf.set_font("Arial", size=10)
+            
+            # **NUEVA FUNCIÓN "ROMPE-PALABRAS"**
+            # Esta función asegura que ningún texto sea demasiado largo para el PDF
+            def force_wrap(text, max_width=80):
+                # Usamos textwrap para cortar palabras largas
+                wrapped_lines = textwrap.wrap(text, width=max_width, break_long_words=True, replace_whitespace=False)
+                return "\n".join(wrapped_lines)
+
             pdf.set_font("Arial", 'B', 16)
             pdf.cell(0, 10, "PLAN DE DESARROLLO INDIVIDUAL (PDI)", ln=True, align='C')
             pdf.ln(10)
 
             def agregar_campo(etiqueta, valor_columna):
                 pdf.set_font("Arial", 'B', 10)
-                # CAMBIO CLAVE: El ancho (w=0) hace que la celda ocupe todo el ancho de la página.
-                pdf.multi_cell(w=0, h=6, txt=f"{etiqueta}:", border=0, align='L')
+                pdf.multi_cell(w=0, h=6, txt=etiqueta + ":", border=0, align='L')
                 pdf.set_font("Arial", '', 10)
-                valor = str(datos_empleado.get(valor_columna, 'N/A'))
-                # CAMBIO CLAVE: El ancho (w=0) también aquí.
-                pdf.multi_cell(w=0, h=6, txt=valor, border=0, align='L')
+                
+                # Convertimos el valor a string y lo procesamos con nuestra nueva función
+                valor_original = str(datos_empleado.get(valor_columna, 'N/A'))
+                valor_seguro = force_wrap(valor_original) # <--- ¡AQUÍ ESTÁ LA MAGIA!
+                
+                pdf.multi_cell(w=0, h=6, txt=valor_seguro, border=0, align='L')
                 pdf.ln(2)
 
             def agregar_seccion(titulo, campos):
