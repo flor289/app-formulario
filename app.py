@@ -60,7 +60,7 @@ if uploaded_file is not None:
     try:
         df = pd.read_excel(uploaded_file)
         # Limpiamos espacios en blanco al inicio/final de los nombres de columnas
-        df.columns = [col.strip() for col in df.columns] 
+        df.columns = [col.strip() for col in df.columns]
         st.success("¡Archivo Excel cargado correctamente! ✅")
 
         # --- GENERACIÓN DE PDF ---
@@ -74,7 +74,7 @@ if uploaded_file is not None:
             styles.add(ParagraphStyle(name='NormalJustificado', parent=styles['Normal'], alignment=TA_JUSTIFY))
             styles.add(ParagraphStyle(name='Etiqueta', parent=styles['Normal'], fontName='Helvetica-Bold'))
             story = [Paragraph("PLAN DE DESARROLLO INDIVIDUAL (PDI)", styles['TituloPrincipal']), Spacer(1, 24)]
-            
+
             def crear_checkbox(pregunta, opciones, respuesta):
                 marcado, no_marcado = "☒", "☐"
                 texto = f"<b>{pregunta}:</b><br/>"
@@ -96,7 +96,7 @@ if uploaded_file is not None:
                     else: bloque.extend([Paragraph(f"<b>{etiqueta}:</b>", styles['Etiqueta']), Paragraph(valor, styles['NormalJustificado'])])
                     bloque.append(Spacer(1, 10))
                 story.append(KeepTogether(bloque))
-            
+
             for titulo, campos in SECCIONES_PDI.items():
                 agregar_seccion(titulo, campos)
 
@@ -127,9 +127,9 @@ if uploaded_file is not None:
                 if st.button(f"Generar PDF para {empleado_seleccionado}"):
                     pdf_buffer = generar_pdf(datos_empleado)
                     st.download_button(label="📥 Descargar PDF", data=pdf_buffer, file_name=f"PDI_{empleado_seleccionado.replace(' ', '_')}.pdf", mime="application/pdf")
-            
+
             st.divider()
-            
+
             st.header("Generar Todos los Formularios en un ZIP")
             if st.button("🚀 Generar y Descargar ZIP con Todos los PDI"):
                 zip_buffer = BytesIO()
