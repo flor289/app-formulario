@@ -17,7 +17,7 @@ st.set_page_config(page_title="Generador PDI Final", page_icon="✅", layout="ce
 st.title("✅ Generador de PDI (Versión Final)")
 st.write("Esta aplicación genera un PDI en PDF a partir de un archivo Excel que subas.")
 
-# --- ESTRUCTURA DE DATOS (CON LOS NOMBRES EXACTOS DE TU EXCEL) ---
+# --- ESTRUCTURA DE DATOS (CON LOS NOMBRES 100% CORRECTOS DE TU EXCEL) ---
 SECCIONES_PDI = {
     "1. Datos Personales y Laborales": {
         "Apellido y Nombre": {'col': "Apellido y Nombre"}, "DNI": {'col': "DNI"}, "Correo electrónico": {'col': "Correo electrónico"},
@@ -45,7 +45,7 @@ SECCIONES_PDI = {
     },
     "6. Proyección y Crecimiento": {
         "¿Le gustaría recibir asesoramiento sobre su plan de desarrollo profesional?": {'col': "Proyección y crecimiento en la empresa\n¿Le gustaría recibir asesoramiento sobre su plan de desarrollo profesional dentro de la empresa? ", 'type': 'checkbox', 'options': ["Sí", "No"]},
-        "¿Estaría dispuesto a asumir nuevos desafíos/responsabilidades?": {'col': "¿Estaría dispuesto a asumir nuevos desafíos o desafíos para avanzar en su carrera dentro de la empresa? ", 'type': 'checkbox', 'options': ["Sí", "No", "No lo sé"]},
+        "¿Estaría dispuesto a asumir nuevos desafíos/responsabilidades?": {'col': "¿Estaría dispuesto a asumir nuevas responsabilidades o desafíos para avanzar en su carrera dentro de la empresa? ", 'type': 'checkbox', 'options': ["Sí", "No", "No lo sé"]},
         "Comentarios adicionales": {'col': "Deje su comentario (opcional)\nSi desea agregar algún comentario sobre su desarrollo profesional en la empresa, puede hacerlo aquí:"}
     }
 }
