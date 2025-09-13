@@ -18,6 +18,7 @@ st.title("✅ Generador de PDI (Versión Final)")
 st.write("Esta aplicación genera un PDI en PDF a partir de un archivo Excel que subas.")
 
 # --- ESTRUCTURA DE DATOS (CON LOS NOMBRES 100% CORRECTOS DE TU EXCEL) ---
+# Hecho a medida con la información que proporcionaste
 SECCIONES_PDI = {
     "1. Datos Personales y Laborales": {
         "Apellido y Nombre": {'col': "Apellido y Nombre"}, "DNI": {'col': "DNI"}, "Correo electrónico": {'col': "Correo electrónico"},
@@ -30,10 +31,10 @@ SECCIONES_PDI = {
         "Relación entre puesto actual y formación académica": {'col': "Su puesto actual ¿está relacionado con su formación académica?", 'type': 'checkbox', 'options': ["Totalmente", "Parcialmente", "No"]}
     },
     "3. Interés de Desarrollo": {
-        "¿Le interesaría desarrollar su carrera dentro de la empresa?": {'col': "Interés de desarrollo\n\n¿Le interesaría desarrollar su carrera dentro de la empresa?", 'type': 'checkbox', 'options': ["Sí", "No"]},
+        "¿Le interesaría desarrollar su carrera dentro de la empresa?": {'col': 'Interés de desarrollo\n\n¿Le interesaría desarrollar su carrera dentro de la empresa?', 'type': 'checkbox', 'options': ["Sí", "No"]},
         "Área de interés futura": {'col': "¿En qué área de la empresa le gustaría desarrollarse en el futuro?", 'type': 'list'},
         "Puesto al que aspira": {'col': "¿Qué tipo de puesto aspira ocupar en el futuro?"},
-        "Motivaciones para cambiar": {'col': "¿Cuáles son los principales factores que lo motivarían en su decisión de cambiar de posición  dentro de la empresa? (Seleccione hasta 3 opciones)", 'type': 'list'}
+        "Motivaciones para cambiar": {'col': "Cuáles son los principales factores que lo motivarían en su decisión de cambiar de posición  dentro de la empresa? (Seleccione hasta 3 opciones)", 'type': 'list'}
     },
     "4. Necesidades de Capacitación": {
         "Competencias a capacitar": {'col': "Capacitación y necesidades de aprendizaje\n¿En qué competencias o conocimientos le gustaría capacitarse para mejorar sus oportunidades de desarrollo? ", 'type': 'list'},
@@ -45,7 +46,7 @@ SECCIONES_PDI = {
     },
     "6. Proyección y Crecimiento": {
         "¿Le gustaría recibir asesoramiento sobre su plan de desarrollo profesional?": {'col': "Proyección y crecimiento en la empresa\n¿Le gustaría recibir asesoramiento sobre su plan de desarrollo profesional dentro de la empresa? ", 'type': 'checkbox', 'options': ["Sí", "No"]},
-        "¿Estaría dispuesto a asumir nuevos desafíos/responsabilidades?": {'col': "¿Estaría dispuesto a asumir nuevas responsabilidades o desafíos para avanzar en su carrera dentro de la empresa? ", 'type': 'checkbox', 'options': ["Sí", "No", "No lo sé"]},
+        "¿Estaría dispuesto a asumir nuevos desafíos/responsabilidades?": {'col': "Estaría dispuesto a asumir nuevas responsabilidades o desafíos para avanzar en su carrera dentro de la empresa? ", 'type': 'checkbox', 'options': ["Sí", "No", "No lo sé"]},
         "Comentarios adicionales": {'col': "Deje su comentario (opcional)\nSi desea agregar algún comentario sobre su desarrollo profesional en la empresa, puede hacerlo aquí:"}
     }
 }
@@ -88,8 +89,8 @@ if uploaded_file is not None:
 
             def agregar_seccion(titulo, campos):
                 bloque = [Paragraph(titulo, styles['TituloSeccion']), Spacer(1, 6)]
-                # Bucle seguro que NO causa el error "too many values to unpack"
                 for etiqueta, config in campos.items():
+                    # Usamos strip() en el nombre de la columna para eliminar espacios extra al inicio/final
                     valor = str(datos_empleado.get(config['col'].strip(), 'N/A'))
                     if config.get('type') == 'checkbox': bloque.append(crear_checkbox(etiqueta, config['options'], valor))
                     elif config.get('type') == 'list': bloque.extend([Paragraph(f"<b>{etiqueta}:</b>", styles['Etiqueta']), Paragraph(format_as_list(valor), styles['NormalJustificado'])])
@@ -151,3 +152,4 @@ if uploaded_file is not None:
 
     except Exception as e:
         st.error(f"Ocurrió un error inesperado: {e}")
+
