@@ -58,7 +58,10 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file is not None:
     try:
+        # Renombramos las columnas del DataFrame para simplificar el acceso
         df = pd.read_excel(uploaded_file)
+        df.columns = [col.strip() for col in df.columns] # Limpiamos espacios extra
+
         st.success("¡Archivo Excel cargado correctamente! ✅")
 
         # --- GENERACIÓN DE PDF ---
@@ -72,19 +75,21 @@ if uploaded_file is not None:
             styles.add(ParagraphStyle(name='NormalJustificado', parent=styles['Normal'], alignment=TA_JUSTIFY))
             styles.add(ParagraphStyle(name='Etiqueta', parent=styles['Normal'], fontName='Helvetica-Bold'))
             story = [Paragraph("PLAN DE DESARROLLO INDIVIDUAL (PDI)", styles['TituloPrincipal']), Spacer(1, 24)]
+            
             def crear_checkbox(pregunta, opciones, respuesta):
                 marcado, no_marcado = "☒", "☐"
                 texto = f"<b>{pregunta}:</b><br/>"
                 lineas = [f"{marcado} <b>{op}</b>" if str(respuesta).strip().lower() == op.strip().lower() else f"<font color='{color_gris}'>{no_marcado} {op}</font>" for op in opciones]
                 texto += " &nbsp; ".join(lineas)
                 return Paragraph(texto, styles['Normal'])
+
             def format_as_list(text):
                 if isinstance(text, str) and ',' in text: return "<br/>".join(f"- {item.strip()}" for item in text.split(','))
                 return text
+
             def agregar_seccion(titulo, campos):
                 bloque = [Paragraph(titulo, styles['TituloSeccion']), Spacer(1, 6)]
                 for etiqueta, config in campos.items():
-                    # Usamos strip() en el nombre de la columna para eliminar espacios extra al inicio/final
                     valor = str(datos_empleado.get(config['col'].strip(), 'N/A'))
                     if config.get('type') == 'checkbox': bloque.append(crear_checkbox(etiqueta, config['options'], valor))
                     elif config.get('type') == 'list': bloque.extend([Paragraph(f"<b>{etiqueta}:</b>", styles['Etiqueta']), Paragraph(format_as_list(valor), styles['NormalJustificado'])])
