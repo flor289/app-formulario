@@ -3,13 +3,14 @@ import pandas as pd
 from io import BytesIO
 import zipfile
 from fpdf import FPDF
+import textwrap
 
 # --- CONFIGURACIÓN DE LA PÁGINA ---
 st.set_page_config(page_title="Generador PDI Estable", page_icon="✅", layout="centered")
 st.title("✅ Generador de PDI (Versión Estable)")
 st.write("Esta aplicación genera un PDI en PDF a partir de un archivo Excel que subas.")
 
-# --- ESTRUCTURA DE DATOS (CON LOS NOMBRES 100% CORRECTOS DE TU EXCEL) ---
+# --- ESTRUCTURA DE DATOS ---
 SECCIONES_PDI = {
     "1. Datos Personales y Laborales": [
         ("Apellido y Nombre", "Apellido y Nombre"),
@@ -49,6 +50,60 @@ SECCIONES_PDI = {
     ]
 }
 
+# --- FUNCIONES AUXILIARES ---
+def safe_text(text, width=80):
+    """Rompe palabras largas para evitar errores de FPDF."""
+    if not isinstance(text, str):
+        text = str(text)
+    return "\n".join(textwrap.wrap(text, width=width, break_long_words=True))
+
+
+def generar_pdf(datos_empleado):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    page_width = pdf.w - 2 * pdf.l_margin
+
+    # Título principal
+    pdf.set_font('Arial', 'B', 16)
+    pdf.set_text_color(42, 92, 170)  # Azul
+    pdf.cell(0, 10, 'PLAN DE DESARROLLO INDIVIDUAL (PDI)', 0, 1, 'C')
+    pdf.ln(10)
+    pdf.set_text_color(0, 0, 0)  # Negro
+
+    # Iterar por secciones
+    for titulo_seccion, campos in SECCIONES_PDI.items():
+        pdf.set_font('Arial', 'B', 12)
+        pdf.set_text_color(42, 92, 170)
+        pdf.cell(0, 10, titulo_seccion, 0, 1, 'L')
+        pdf.set_text_color(0, 0, 0)
+
+        for etiqueta, columna in campos:
+            valor = str(datos_empleado.get(columna, 'N/A'))
+
+            # Etiqueta
+            pdf.set_font('Arial', 'B', 10)
+            pdf.multi_cell(page_width, 6, etiqueta + ":")
+
+            # Valor
+            pdf.set_font('Arial', '', 10)
+            if "," in valor and len(valor) > 40:
+                items = [item.strip() for item in valor.split(',')]
+                texto_lista = "\n".join(f"  •  {item}" for item in items)
+                pdf.multi_cell(page_width, 5, safe_text(texto_lista))
+            else:
+                pdf.multi_cell(page_width, 6, safe_text(valor))
+            pdf.ln(3)
+        pdf.ln(6)
+
+    # Página extra para síntesis
+    pdf.add_page()
+    pdf.set_font('Arial', 'B', 12)
+    pdf.set_text_color(42, 92, 170)
+    pdf.cell(0, 10, "7. Síntesis de la entrevista", 0, 1, 'L')
+
+    return pdf.output(dest='S').encode('latin-1')
+
 # --- CARGADOR DE ARCHIVO EXCEL ---
 uploaded_file = st.file_uploader(
     "Sube tu archivo Excel con los datos de los empleados",
@@ -61,70 +116,28 @@ if uploaded_file is not None:
         df.columns = [col.strip() for col in df.columns]
         st.success("¡Archivo Excel cargado correctamente! ✅")
 
-        # --- GENERACIÓN DE PDF con FPDF2 (Versión Estable y Mejorada) ---
-        def generar_pdf(datos_empleado):
-            pdf = FPDF()
-            pdf.add_page()
-            pdf.set_auto_page_break(auto=True, margin=15)
-            
-            # Título principal
-            pdf.set_font('Arial', 'B', 16)
-            pdf.set_text_color(42, 92, 170) # Color Azul
-            pdf.cell(0, 10, 'PLAN DE DESARROLLO INDIVIDUAL (PDI)', 0, 1, 'C')
-            pdf.ln(10)
-            pdf.set_text_color(0, 0, 0) # Volver a negro
-
-            # Iteramos a través de la nueva estructura de datos (lista de tuplas)
-            # Esto elimina por completo el error "too many values to unpack"
-            for titulo_seccion, campos in SECCIONES_PDI.items():
-                pdf.set_font('Arial', 'B', 12)
-                pdf.set_text_color(42, 92, 170) # Color Azul
-                pdf.cell(0, 10, titulo_seccion, 0, 1, 'L')
-                pdf.set_text_color(0, 0, 0) # Volver a negro
-                
-                for etiqueta, columna in campos:
-                    valor = str(datos_empleado.get(columna, 'N/A'))
-                    
-                    pdf.set_font('Arial', 'B', 10)
-                    pdf.multi_cell(0, 6, etiqueta + ":")
-                    
-                    pdf.set_font('Arial', '', 10)
-                    # Formato de lista para respuestas con comas
-                    if "," in valor and len(valor) > 40: # Solo si es una lista larga
-                        items = [item.strip() for item in valor.split(',')]
-                        texto_lista = "\n".join(f"  •  {item}" for item in items)
-                        pdf.multi_cell(0, 5, texto_lista)
-                    else:
-                        pdf.multi_cell(0, 6, valor)
-                    pdf.ln(3)
-                pdf.ln(6)
-
-            # Pie de página y secciones manuales (simplificado)
-            pdf.add_page()
-            pdf.set_font('Arial', 'B', 12)
-            pdf.set_text_color(42, 92, 170)
-            pdf.cell(0, 10, "7. Síntesis de la entrevista", 0, 1, 'L')
-            # ... puedes añadir más contenido aquí si lo necesitas
-
-            return pdf.output(dest='S').encode('latin-1')
-
-        # --- INTERFAZ PRINCIPAL ---
         columna_nombre = "Apellido y Nombre"
         if columna_nombre not in df.columns and "Nombre" in df.columns:
             columna_nombre = "Nombre"
-        
+
         if columna_nombre in df.columns:
             st.header("Generar PDF Individual")
             empleados = df[columna_nombre].dropna().unique()
             empleado_seleccionado = st.selectbox("Selecciona un empleado:", empleados)
+
             if empleado_seleccionado:
                 datos_empleado = df[df[columna_nombre] == empleado_seleccionado].iloc[0].to_dict()
                 if st.button(f"Generar PDF para {empleado_seleccionado}"):
                     pdf_buffer = generar_pdf(datos_empleado)
-                    st.download_button(label="📥 Descargar PDF", data=pdf_buffer, file_name=f"PDI_{empleado_seleccionado.replace(' ', '_')}.pdf", mime="application/pdf")
-            
+                    st.download_button(
+                        label="📥 Descargar PDF",
+                        data=pdf_buffer,
+                        file_name=f"PDI_{empleado_seleccionado.replace(' ', '_')}.pdf",
+                        mime="application/pdf"
+                    )
+
             st.divider()
-            
+
             st.header("Generar Todos los Formularios en un ZIP")
             if st.button("🚀 Generar y Descargar ZIP con Todos los PDI"):
                 zip_buffer = BytesIO()
@@ -135,11 +148,16 @@ if uploaded_file is not None:
                         nombre_empleado_raw = row.get(columna_nombre, f"Empleado_{index+1}")
                         pdf_buffer = generar_pdf(row.to_dict())
                         nombre_archivo = f"PDI_{str(nombre_empleado_raw).replace(' ', '_').replace(',', '')}.pdf"
-                        zipf.writestr(nombre_archivo, pdf_buffer.getvalue())
+                        zipf.writestr(nombre_archivo, pdf_buffer)
                         progreso_actual = (index + 1) / total_empleados
                         progress_bar.progress(progreso_actual, text=f"Generando PDF: {nombre_empleado_raw} ({index+1}/{total_empleados})")
                 progress_bar.empty()
-                st.download_button(label="📥 Descargar Archivo ZIP", data=zip_buffer.getvalue(), file_name="Todos_los_PDI.zip", mime="application/zip")
+                st.download_button(
+                    label="📥 Descargar Archivo ZIP",
+                    data=zip_buffer.getvalue(),
+                    file_name="Todos_los_PDI.zip",
+                    mime="application/zip"
+                )
         else:
             st.error(f"Error Crítico: No se encontró la columna '{columna_nombre}' o 'Nombre' en tu archivo Excel.")
             st.write("Columnas encontradas en tu archivo:")
@@ -147,3 +165,5 @@ if uploaded_file is not None:
 
     except Exception as e:
         st.error(f"Ocurrió un error inesperado: {e}")
+
+
