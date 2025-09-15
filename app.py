@@ -60,15 +60,10 @@ def safe_text(text, width=100):
 def generar_pdf(datos_empleado):
     pdf = FPDF()
     pdf.add_page()
-
-    # Agregamos fuentes Unicode (colocar los .ttf en la carpeta del script)
-    pdf.add_font("DejaVu", "", "DejaVuSans.ttf", uni=True)
-    pdf.add_font("DejaVu", "B", "DejaVuSans-Bold.ttf", uni=True)
-
     pdf.set_auto_page_break(auto=True, margin=15)
 
     # Título principal
-    pdf.set_font("DejaVu", "B", 16)
+    pdf.set_font("Arial", "B", 16)
     pdf.set_text_color(42, 92, 170)
     pdf.cell(0, 10, 'PLAN DE DESARROLLO INDIVIDUAL (PDI)', 0, 1, 'C')
     pdf.ln(10)
@@ -78,7 +73,7 @@ def generar_pdf(datos_empleado):
 
     # Iteramos por secciones
     for titulo_seccion, campos in SECCIONES_PDI.items():
-        pdf.set_font("DejaVu", "B", 12)
+        pdf.set_font("Arial", "B", 12)
         pdf.set_text_color(42, 92, 170)
         pdf.cell(0, 10, titulo_seccion, 0, 1, 'L')
         pdf.set_text_color(0, 0, 0)
@@ -86,10 +81,10 @@ def generar_pdf(datos_empleado):
         for etiqueta, columna in campos:
             valor = str(datos_empleado.get(columna, 'N/A'))
 
-            pdf.set_font("DejaVu", "B", 10)
+            pdf.set_font("Arial", "B", 10)
             pdf.multi_cell(page_width, 6, etiqueta + ":")
 
-            pdf.set_font("DejaVu", "", 10)
+            pdf.set_font("Arial", "", 10)
             if "," in valor and len(valor) > 40:
                 items = [item.strip() for item in valor.split(",")]
                 texto_lista = "\n".join(f"- {item}" for item in items)
@@ -101,7 +96,7 @@ def generar_pdf(datos_empleado):
 
     # Sección adicional
     pdf.add_page()
-    pdf.set_font("DejaVu", "B", 12)
+    pdf.set_font("Arial", "B", 12)
     pdf.set_text_color(42, 92, 170)
     pdf.cell(0, 10, "7. Síntesis de la entrevista", 0, 1, 'L')
 
