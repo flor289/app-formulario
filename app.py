@@ -111,7 +111,7 @@ if uploaded_file is not None:
         # --- INTERFAZ PRINCIPAL ---
         columna_nombre = "Apellido y Nombre"
         if columna_nombre not in df.columns and "Nombre" in df.columns:
-            columna_nombre = "Nombre" # Adaptación por si cambiaste el nombre
+            columna_nombre = "Nombre"
         
         if columna_nombre in df.columns:
             st.header("Generar PDF Individual")
