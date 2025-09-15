@@ -51,79 +51,64 @@ SECCIONES_PDI = {
 }
 
 # --- FUNCIONES AUXILIARES ---
-def safe_text(text, width=80):
-    """Rompe palabras largas para evitar errores de FPDF."""
+def safe_text(text, width=100):
+    """Corta texto largo para que no rompa el PDF"""
     if not isinstance(text, str):
         text = str(text)
     return "\n".join(textwrap.wrap(text, width=width, break_long_words=True))
 
-
 def generar_pdf(datos_empleado):
     pdf = FPDF()
     pdf.add_page()
-    pdf.set_auto_page_break(auto=True, margin=15)
-    page_width = pdf.w - 2 * pdf.l_margin
 
-    # Si quisieras soporte Unicode (ver nota más abajo), aquí podrías registrar una fuente TTF:
-    # pdf.add_font('DejaVu', '', 'DejaVuSans.ttf', uni=True)
-    # pdf.set_font('DejaVu', '', 12)
+    # Agregamos fuentes Unicode (colocar los .ttf en la carpeta del script)
+    pdf.add_font("DejaVu", "", "DejaVuSans.ttf", uni=True)
+    pdf.add_font("DejaVu", "B", "DejaVuSans-Bold.ttf", uni=True)
+
+    pdf.set_auto_page_break(auto=True, margin=15)
 
     # Título principal
-    pdf.set_font('Arial', 'B', 16)
-    pdf.set_text_color(42, 92, 170)  # Azul
+    pdf.set_font("DejaVu", "B", 16)
+    pdf.set_text_color(42, 92, 170)
     pdf.cell(0, 10, 'PLAN DE DESARROLLO INDIVIDUAL (PDI)', 0, 1, 'C')
     pdf.ln(10)
-    pdf.set_text_color(0, 0, 0)  # Negro
+    pdf.set_text_color(0, 0, 0)
 
-    # Iterar por secciones
+    page_width = pdf.w - 2 * pdf.l_margin
+
+    # Iteramos por secciones
     for titulo_seccion, campos in SECCIONES_PDI.items():
-        pdf.set_font('Arial', 'B', 12)
+        pdf.set_font("DejaVu", "B", 12)
         pdf.set_text_color(42, 92, 170)
         pdf.cell(0, 10, titulo_seccion, 0, 1, 'L')
         pdf.set_text_color(0, 0, 0)
 
         for etiqueta, columna in campos:
-            valor = datos_empleado.get(columna, 'N/A')
-            # Aseguramos string
-            valor = "" if pd.isna(valor) else str(valor)
+            valor = str(datos_empleado.get(columna, 'N/A'))
 
-            # Etiqueta
-            pdf.set_font('Arial', 'B', 10)
+            pdf.set_font("DejaVu", "B", 10)
             pdf.multi_cell(page_width, 6, etiqueta + ":")
 
-            # Valor
-            pdf.set_font('Arial', '', 10)
+            pdf.set_font("DejaVu", "", 10)
             if "," in valor and len(valor) > 40:
-                items = [item.strip() for item in valor.split(',')]
-                # USO DE '-' (ASCII) en vez de '•' para evitar problemas de fuente
-                texto_lista = "\n".join(f"  -  {item}" for item in items)
+                items = [item.strip() for item in valor.split(",")]
+                texto_lista = "\n".join(f"- {item}" for item in items)
                 pdf.multi_cell(page_width, 5, safe_text(texto_lista))
             else:
                 pdf.multi_cell(page_width, 6, safe_text(valor))
             pdf.ln(3)
         pdf.ln(6)
 
-    # Página extra para síntesis
+    # Sección adicional
     pdf.add_page()
-    pdf.set_font('Arial', 'B', 12)
+    pdf.set_font("DejaVu", "B", 12)
     pdf.set_text_color(42, 92, 170)
     pdf.cell(0, 10, "7. Síntesis de la entrevista", 0, 1, 'L')
 
-    # Salida segura: intentamos codificar en latin-1 (las fuentes core de FPDF manejan latin-1).
-    s = pdf.output(dest='S')
-    try:
-        return s.encode('latin-1')
-    except UnicodeEncodeError:
-        # Si por alguna razón hay caracteres fuera de latin-1 (ej emojis en el Excel),
-        # los reemplazamos para no romper la generación.
-        return s.encode('latin-1', errors='replace')
+    return pdf.output(dest='S')  # Devuelve bytes directamente
 
-
-# --- CARGADOR DE ARCHIVO EXCEL ---
-uploaded_file = st.file_uploader(
-    "Sube tu archivo Excel con los datos de los empleados",
-    type=["xlsx"]
-)
+# --- INTERFAZ PRINCIPAL ---
+uploaded_file = st.file_uploader("Sube tu archivo Excel con los datos de los empleados", type=["xlsx"])
 
 if uploaded_file is not None:
     try:
@@ -143,11 +128,11 @@ if uploaded_file is not None:
             if empleado_seleccionado:
                 datos_empleado = df[df[columna_nombre] == empleado_seleccionado].iloc[0].to_dict()
                 if st.button(f"Generar PDF para {empleado_seleccionado}"):
-                    pdf_bytes = generar_pdf(datos_empleado)
+                    pdf_buffer = generar_pdf(datos_empleado)
                     st.download_button(
                         label="📥 Descargar PDF",
-                        data=pdf_bytes,
-                        file_name=f"PDI_{str(empleado_seleccionado).replace(' ', '_').replace(',', '')}.pdf",
+                        data=pdf_buffer,
+                        file_name=f"PDI_{empleado_seleccionado.replace(' ', '_')}.pdf",
                         mime="application/pdf"
                     )
 
@@ -156,20 +141,19 @@ if uploaded_file is not None:
             st.header("Generar Todos los Formularios en un ZIP")
             if st.button("🚀 Generar y Descargar ZIP con Todos los PDI"):
                 zip_buffer = BytesIO()
-                progress_bar = st.progress(0)
-                status_text = st.empty()
+                progress_bar = st.progress(0, text="Iniciando generación de PDFs...")
                 total_empleados = len(df)
+
                 with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zipf:
                     for index, row in df.iterrows():
                         nombre_empleado_raw = row.get(columna_nombre, f"Empleado_{index+1}")
-                        pdf_bytes = generar_pdf(row.to_dict())
+                        pdf_buffer = generar_pdf(row.to_dict())
                         nombre_archivo = f"PDI_{str(nombre_empleado_raw).replace(' ', '_').replace(',', '')}.pdf"
-                        zipf.writestr(nombre_archivo, pdf_bytes)
+                        zipf.writestr(nombre_archivo, pdf_buffer)
                         progreso_actual = (index + 1) / total_empleados
-                        progress_bar.progress(progreso_actual)
-                        status_text.text(f"Generando PDF: {nombre_empleado_raw} ({index+1}/{total_empleados})")
+                        progress_bar.progress(progreso_actual, text=f"Generando PDF: {nombre_empleado_raw} ({index+1}/{total_empleados})")
+
                 progress_bar.empty()
-                status_text.empty()
                 st.download_button(
                     label="📥 Descargar Archivo ZIP",
                     data=zip_buffer.getvalue(),
@@ -177,12 +161,13 @@ if uploaded_file is not None:
                     mime="application/zip"
                 )
         else:
-            st.error(f"Error Crítico: No se encontró la columna '{columna_nombre}' o 'Nombre' en tu archivo Excel.")
+            st.error(f"Error: No se encontró la columna '{columna_nombre}' o 'Nombre' en tu archivo Excel.")
             st.write("Columnas encontradas en tu archivo:")
             st.write(df.columns.tolist())
 
     except Exception as e:
         st.error(f"Ocurrió un error inesperado: {e}")
+
 
 
 
