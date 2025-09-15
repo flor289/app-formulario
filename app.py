@@ -17,11 +17,11 @@ st.set_page_config(page_title="Generador PDI Final", page_icon="✅", layout="ce
 st.title("✅ Generador de PDI (Versión Final)")
 st.write("Esta aplicación genera un PDI en PDF a partir de un archivo Excel que subas.")
 
-# --- ESTRUCTURA DE DATOS (CON LOS NOMBRES 100% CORRECTOS DE TU EXCEL) ---
-# Hecho a medida con la información de tu archivo
+# --- ESTRUCTURA DE DATOS (CON LOS NOMBRES CORREGIDOS DE TU NUEVO EXCEL) ---
+# Hecho a medida con la información del archivo Respuestas.xlsx - Hoja3.csv
 SECCIONES_PDI = {
     "1. Datos Personales y Laborales": {
-        "Apellido y Nombre": {'col': "Apellido y Nombre"}, "DNI": {'col': "DNI"}, "Correo electrónico": {'col': "Correo electrónico"},
+        "Nombre": {'col': "Nombre"}, "DNI": {'col': "DNI"}, "Correo electrónico": {'col': "Correo electrónico"},
         "Número de contacto": {'col': "Número de contacto"}, "Edad": {'col': "Edad"}, "Posición actual": {'col': "Posición actual"},
         "Fecha de ingreso": {'col': "Fecha de ingreso a la empresa"}, "Lugar de trabajo": {'col': "Lugar de trabajo"}
     },
@@ -92,7 +92,6 @@ if uploaded_file is not None:
 
             def agregar_seccion(titulo, campos):
                 bloque = [Paragraph(titulo, styles['TituloSeccion']), Spacer(1, 6)]
-                # Bucle seguro que NO causa el error "too many values to unpack"
                 for etiqueta, config in campos.items():
                     valor = str(datos_empleado.get(config['col'].strip(), 'N/A'))
                     if config.get('type') == 'checkbox': bloque.append(crear_checkbox(etiqueta, config['options'], valor))
@@ -121,7 +120,7 @@ if uploaded_file is not None:
             return buffer
 
         # --- INTERFAZ PRINCIPAL ---
-        columna_nombre = "Apellido y Nombre"
+        columna_nombre = "Nombre" # <-- CAMBIO CLAVE
         if columna_nombre in df.columns:
             st.header("Generar PDF Individual")
             empleados = df[columna_nombre].dropna().unique()
