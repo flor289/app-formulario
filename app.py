@@ -151,6 +151,9 @@ if uploaded_file is not None:
         else:
             st.error(f"Error Crítico: No se encontró la columna '{columna_nombre}' en tu archivo Excel.")
             st.write("Asegúrate de que tu Excel tenga una columna con ese nombre exacto.")
+            st.write("Columnas encontradas en tu archivo:")
+            st.write(df.columns.tolist())
 
     except Exception as e:
         st.error(f"Ocurrió un error inesperado: {e}")
+
