@@ -17,7 +17,8 @@ st.set_page_config(page_title="Generador PDI Final", page_icon="✅", layout="ce
 st.title("✅ Generador de PDI (Versión Final)")
 st.write("Esta aplicación genera un PDI en PDF a partir de un archivo Excel que subas.")
 
-# --- ESTRUCTURA DE DATOS (CON LOS NOMBRES 100% CORRECTOS DE TU EXCEL) ---
+# --- ESTRUCTURA DE DATOS (CON LOS NOMBRES CORREGIDOS DE TU NUEVO EXCEL) ---
+# Hecho a medida con la información del archivo Respuestas.xlsx - Hoja3.csv
 SECCIONES_PDI = {
     "1. Datos Personales y Laborales": {
         "Apellido y Nombre": {'col': "Apellido y Nombre"}, "DNI": {'col': "DNI"}, "Correo electrónico": {'col': "Correo electrónico"},
@@ -25,30 +26,33 @@ SECCIONES_PDI = {
         "Fecha de ingreso": {'col': "Fecha de ingreso a la empresa"}, "Lugar de trabajo": {'col': "Lugar de trabajo"}
     },
     "2. Formación y Nivel Educativo": {
-        "Nivel educativo": {'col': "Nivel educativo alcanzado"}, "Título obtenido": {'col': "Título obtenido (si corresponde)"},
+        "Nivel educativo": {'col': "Nivel educativo alcanzado"}, 
+        "Carrera Cursada/En Curso": {'col': "Carrera cursada/en curso"},
+        "Título obtenido": {'col': "Título obtenido (si corresponde)"},
         "Otras capacitaciones": {'col': "Otras capacitaciones realizadas fuera de la empresa finalizadas (Mencionar)"},
-        "Relación entre puesto actual y formación académica": {'col': "Su puesto actual ¿está relacionado con su formación académica?", 'type': 'checkbox', 'options': ["Totalmente", "Parcialmente", "No"]}
+        "¿Está relacionado con su formación académica?": {'col': "¿está relacionado con su formación académica?", 'type': 'checkbox', 'options': ["Totalmente", "Parcialmente", "No"]}
     },
     "3. Interés de Desarrollo": {
-        "¿Le interesaría desarrollar su carrera dentro de la empresa?": {'col': 'Interés de desarrollo\n\n¿Le interesaría desarrollar su carrera dentro de la empresa?', 'type': 'checkbox', 'options': ["Sí", "No"]},
+        "¿Le interesaría desarrollar su carrera dentro de la empresa?": {'col': '¿Le interesaría desarrollar su carrera dentro de la empresa?', 'type': 'checkbox', 'options': ["Sí", "No"]},
         "Área de interés futura": {'col': "¿En qué área de la empresa le gustaría desarrollarse en el futuro?", 'type': 'list'},
         "Puesto al que aspira": {'col': "¿Qué tipo de puesto aspira ocupar en el futuro?"},
         "Motivaciones para cambiar": {'col': "¿Cuáles son los principales factores que lo motivarían en su decisión de cambiar de posición  dentro de la empresa? (Seleccione hasta 3 opciones)", 'type': 'list'}
     },
     "4. Necesidades de Capacitación": {
-        "Competencias a capacitar": {'col': "Capacitación y necesidades de aprendizaje\n¿En qué competencias o conocimientos le gustaría capacitarse para mejorar sus oportunidades de desarrollo? ", 'type': 'list'},
+        "Competencias a capacitar": {'col': "¿En qué competencias o conocimientos le gustaría capacitarse para mejorar sus oportunidades de desarrollo?", 'type': 'list'},
         "Especificación de interés": {'col': "A partir de su respuesta anterior, por favor, especifique en qué competencia o conocimiento le gustaría capacitarse"}
     },
     "5. Fortalezas y Obstáculos": {
-        "Fortalezas profesionales": {'col': "Fortalezas y oportunidades de mejora\n¿Cuáles considera que son sus principales fortalezas profesionales? ", 'type': 'list'},
+        "Fortalezas profesionales": {'col': "¿Cuáles considera que son sus principales fortalezas profesionales?", 'type': 'list'},
         "Obstáculos para el desarrollo": {'col': "¿Qué obstáculos encuentra para su desarrollo profesional dentro de la empresa?", 'type': 'list'}
     },
     "6. Proyección y Crecimiento": {
-        "¿Le gustaría recibir asesoramiento sobre su plan de desarrollo profesional?": {'col': "Proyección y crecimiento en la empresa\n¿Le gustaría recibir asesoramiento sobre su plan de desarrollo profesional dentro de la empresa? ", 'type': 'checkbox', 'options': ["Sí", "No"]},
-        "¿Estaría dispuesto a asumir nuevos desafíos/responsabilidades?": {'col': "¿Estaría dispuesto a asumir nuevas responsabilidades o desafíos para avanzar en su carrera dentro de la empresa? ", 'type': 'checkbox', 'options': ["Sí", "No", "No lo sé"]},
-        "Comentarios adicionales": {'col': "Deje su comentario (opcional)\nSi desea agregar algún comentario sobre su desarrollo profesional en la empresa, puede hacerlo aquí:"}
+        "¿Le gustaría recibir asesoramiento sobre su plan de desarrollo profesional?": {'col': "¿Le gustaría recibir asesoramiento sobre su plan de desarrollo profesional dentro de la empresa?", 'type': 'checkbox', 'options': ["Sí", "No"]},
+        "¿Estaría dispuesto a asumir nuevos desafíos/responsabilidades?": {'col': "¿Estaría dispuesto a asumir nuevas responsabilidades o desafíos para avanzar en su carrera dentro de la empresa?", 'type': 'checkbox', 'options': ["Sí", "No", "No lo sé"]},
+        "Comentarios adicionales": {'col': "Si desea agregar algún comentario sobre su desarrollo profesional en la empresa, puede hacerlo aquí:"}
     }
 }
+
 
 # --- CARGADOR DE ARCHIVO EXCEL ---
 uploaded_file = st.file_uploader(
@@ -88,7 +92,6 @@ if uploaded_file is not None:
 
             def agregar_seccion(titulo, campos):
                 bloque = [Paragraph(titulo, styles['TituloSeccion']), Spacer(1, 6)]
-                # Bucle seguro que NO causa el error "too many values to unpack"
                 for etiqueta, config in campos.items():
                     valor = str(datos_empleado.get(config['col'].strip(), 'N/A'))
                     if config.get('type') == 'checkbox': bloque.append(crear_checkbox(etiqueta, config['options'], valor))
