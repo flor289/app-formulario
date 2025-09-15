@@ -10,7 +10,6 @@ st.title("✅ Generador de PDI (Versión Estable)")
 st.write("Esta aplicación genera un PDI en PDF a partir de un archivo Excel que subas.")
 
 # --- ESTRUCTURA DE DATOS (CON LOS NOMBRES 100% CORRECTOS DE TU EXCEL) ---
-# Hecho a medida con la información que proporcionaste
 SECCIONES_PDI = {
     "1. Datos Personales y Laborales": [
         ("Apellido y Nombre", "Apellido y Nombre"),
@@ -62,7 +61,7 @@ if uploaded_file is not None:
         df.columns = [col.strip() for col in df.columns]
         st.success("¡Archivo Excel cargado correctamente! ✅")
 
-        # --- GENERACIÓN DE PDF con FPDF2 (Versión Estable) ---
+        # --- GENERACIÓN DE PDF con FPDF2 (Versión Estable y Mejorada) ---
         def generar_pdf(datos_empleado):
             pdf = FPDF()
             pdf.add_page()
@@ -105,7 +104,6 @@ if uploaded_file is not None:
             pdf.set_font('Arial', 'B', 12)
             pdf.set_text_color(42, 92, 170)
             pdf.cell(0, 10, "7. Síntesis de la entrevista", 0, 1, 'L')
-            pdf.set_text_color(0, 0, 0)
             # ... puedes añadir más contenido aquí si lo necesitas
 
             return pdf.output(dest='S').encode('latin-1')
@@ -113,7 +111,7 @@ if uploaded_file is not None:
         # --- INTERFAZ PRINCIPAL ---
         columna_nombre = "Apellido y Nombre"
         if columna_nombre not in df.columns and "Nombre" in df.columns:
-            columna_nombre = "Nombre"
+            columna_nombre = "Nombre" # Adaptación por si cambiaste el nombre
         
         if columna_nombre in df.columns:
             st.header("Generar PDF Individual")
