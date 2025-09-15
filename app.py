@@ -64,6 +64,10 @@ def generar_pdf(datos_empleado):
     pdf.set_auto_page_break(auto=True, margin=15)
     page_width = pdf.w - 2 * pdf.l_margin
 
+    # Si quisieras soporte Unicode (ver nota más abajo), aquí podrías registrar una fuente TTF:
+    # pdf.add_font('DejaVu', '', 'DejaVuSans.ttf', uni=True)
+    # pdf.set_font('DejaVu', '', 12)
+
     # Título principal
     pdf.set_font('Arial', 'B', 16)
     pdf.set_text_color(42, 92, 170)  # Azul
@@ -79,7 +83,9 @@ def generar_pdf(datos_empleado):
         pdf.set_text_color(0, 0, 0)
 
         for etiqueta, columna in campos:
-            valor = str(datos_empleado.get(columna, 'N/A'))
+            valor = datos_empleado.get(columna, 'N/A')
+            # Aseguramos string
+            valor = "" if pd.isna(valor) else str(valor)
 
             # Etiqueta
             pdf.set_font('Arial', 'B', 10)
@@ -89,7 +95,8 @@ def generar_pdf(datos_empleado):
             pdf.set_font('Arial', '', 10)
             if "," in valor and len(valor) > 40:
                 items = [item.strip() for item in valor.split(',')]
-                texto_lista = "\n".join(f"  •  {item}" for item in items)
+                # USO DE '-' (ASCII) en vez de '•' para evitar problemas de fuente
+                texto_lista = "\n".join(f"  -  {item}" for item in items)
                 pdf.multi_cell(page_width, 5, safe_text(texto_lista))
             else:
                 pdf.multi_cell(page_width, 6, safe_text(valor))
@@ -102,7 +109,15 @@ def generar_pdf(datos_empleado):
     pdf.set_text_color(42, 92, 170)
     pdf.cell(0, 10, "7. Síntesis de la entrevista", 0, 1, 'L')
 
-    return pdf.output(dest='S').encode('latin-1')
+    # Salida segura: intentamos codificar en latin-1 (las fuentes core de FPDF manejan latin-1).
+    s = pdf.output(dest='S')
+    try:
+        return s.encode('latin-1')
+    except UnicodeEncodeError:
+        # Si por alguna razón hay caracteres fuera de latin-1 (ej emojis en el Excel),
+        # los reemplazamos para no romper la generación.
+        return s.encode('latin-1', errors='replace')
+
 
 # --- CARGADOR DE ARCHIVO EXCEL ---
 uploaded_file = st.file_uploader(
@@ -128,11 +143,11 @@ if uploaded_file is not None:
             if empleado_seleccionado:
                 datos_empleado = df[df[columna_nombre] == empleado_seleccionado].iloc[0].to_dict()
                 if st.button(f"Generar PDF para {empleado_seleccionado}"):
-                    pdf_buffer = generar_pdf(datos_empleado)
+                    pdf_bytes = generar_pdf(datos_empleado)
                     st.download_button(
                         label="📥 Descargar PDF",
-                        data=pdf_buffer,
-                        file_name=f"PDI_{empleado_seleccionado.replace(' ', '_')}.pdf",
+                        data=pdf_bytes,
+                        file_name=f"PDI_{str(empleado_seleccionado).replace(' ', '_').replace(',', '')}.pdf",
                         mime="application/pdf"
                     )
 
@@ -141,17 +156,20 @@ if uploaded_file is not None:
             st.header("Generar Todos los Formularios en un ZIP")
             if st.button("🚀 Generar y Descargar ZIP con Todos los PDI"):
                 zip_buffer = BytesIO()
-                progress_bar = st.progress(0, text="Iniciando generación de PDFs...")
+                progress_bar = st.progress(0)
+                status_text = st.empty()
                 total_empleados = len(df)
                 with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zipf:
                     for index, row in df.iterrows():
                         nombre_empleado_raw = row.get(columna_nombre, f"Empleado_{index+1}")
-                        pdf_buffer = generar_pdf(row.to_dict())
+                        pdf_bytes = generar_pdf(row.to_dict())
                         nombre_archivo = f"PDI_{str(nombre_empleado_raw).replace(' ', '_').replace(',', '')}.pdf"
-                        zipf.writestr(nombre_archivo, pdf_buffer)
+                        zipf.writestr(nombre_archivo, pdf_bytes)
                         progreso_actual = (index + 1) / total_empleados
-                        progress_bar.progress(progreso_actual, text=f"Generando PDF: {nombre_empleado_raw} ({index+1}/{total_empleados})")
+                        progress_bar.progress(progreso_actual)
+                        status_text.text(f"Generando PDF: {nombre_empleado_raw} ({index+1}/{total_empleados})")
                 progress_bar.empty()
+                status_text.empty()
                 st.download_button(
                     label="📥 Descargar Archivo ZIP",
                     data=zip_buffer.getvalue(),
@@ -165,5 +183,7 @@ if uploaded_file is not None:
 
     except Exception as e:
         st.error(f"Ocurrió un error inesperado: {e}")
+
+
 
 
