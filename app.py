@@ -100,7 +100,7 @@ def generar_pdf(datos_empleado):
     pdf.set_text_color(42, 92, 170)
     pdf.cell(0, 10, "7. Síntesis de la entrevista", 0, 1, 'L')
 
-    return pdf.output(dest='S')  # Devuelve bytes directamente
+    return bytes(pdf.output(dest='S'))  # ahora es compatible con download_button
 
 # --- INTERFAZ PRINCIPAL ---
 uploaded_file = st.file_uploader("Sube tu archivo Excel con los datos de los empleados", type=["xlsx"])
@@ -162,6 +162,7 @@ if uploaded_file is not None:
 
     except Exception as e:
         st.error(f"Ocurrió un error inesperado: {e}")
+
 
 
 
