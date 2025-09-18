@@ -82,15 +82,59 @@ def crear_pdf_reporte(titulo_reporte, rango_fechas_str, df_altas, df_bajas, baja
     pdf.report_title = titulo_reporte
     pdf.add_page()
     
+    # --- MEJORA ESTÉTICA: DIBUJAR INDICADORES CLAVE (KPIs) EN EL PDF ---
+    pdf.set_font('Arial', 'B', 12)
+    pdf.cell(0, 10, f"Resumen Ejecutivo del Período: {rango_fechas_str}", ln=True, align='L')
+    
+    kpi_width = 60
+    kpi_height = 25
+    x_start = pdf.get_x()
+    
+    # KPI 1: Dotación Activa
+    pdf.set_fill_color(240, 242, 246) # Gris claro
+    pdf.cell(kpi_width, kpi_height, "", border=1, fill=True)
+    pdf.set_xy(x_start, pdf.get_y() + 5)
+    pdf.set_font('Arial', '', 11)
+    pdf.cell(kpi_width, 8, "Dotación Activa Total", align='C')
+    pdf.set_xy(x_start, pdf.get_y() + 8)
+    pdf.set_font('Arial', 'B', 20)
+    total_activos = f"{resumen_activos.loc['Total', 'Total']:,}".replace(',', '.') if not resumen_activos.empty else "0"
+    pdf.cell(kpi_width, 10, total_activos, align='C')
+    
+    # KPI 2: Altas
+    pdf.set_xy(x_start + kpi_width + 10, pdf.get_y() - 13)
+    pdf.set_fill_color(220, 255, 220) # Verde claro
+    pdf.cell(kpi_width, kpi_height, "", border=1, fill=True)
+    pdf.set_xy(x_start + kpi_width + 10, pdf.get_y() + 5)
+    pdf.set_font('Arial', '', 11)
+    pdf.cell(kpi_width, 8, "Altas del Período", align='C')
+    pdf.set_xy(x_start + kpi_width + 10, pdf.get_y() + 8)
+    pdf.set_font('Arial', 'B', 20)
+    pdf.cell(kpi_width, 10, str(len(df_altas)), align='C')
+    
+    # KPI 3: Bajas
+    pdf.set_xy(x_start + (kpi_width * 2) + 20, pdf.get_y() - 13)
+    pdf.set_fill_color(255, 220, 220) # Rojo claro
+    pdf.cell(kpi_width, kpi_height, "", border=1, fill=True)
+    pdf.set_xy(x_start + (kpi_width * 2) + 20, pdf.get_y() + 5)
+    pdf.set_font('Arial', '', 11)
+    pdf.cell(kpi_width, 8, "Bajas del Período", align='C')
+    pdf.set_xy(x_start + (kpi_width * 2) + 20, pdf.get_y() + 8)
+    pdf.set_font('Arial', 'B', 20)
+    pdf.cell(kpi_width, 10, str(len(df_bajas)), align='C')
+
+    pdf.ln(25) # Espacio después de los KPIs
+    # --- FIN DE LA MEJORA ESTÉTICA ---
+
     fecha_final = rango_fechas_str.split(' - ')[-1]
-    pdf.draw_table(f"Resumen de Bajas (Período: {rango_fechas_str})", resumen_bajas, is_crosstab=True)
-    pdf.draw_table(f"Resumen de Altas (Período: {rango_fechas_str})", resumen_altas, is_crosstab=True)
+    pdf.draw_table("Resumen de Bajas", resumen_bajas, is_crosstab=True)
+    pdf.draw_table("Resumen de Altas", resumen_altas, is_crosstab=True)
     pdf.draw_table(f"Composición de la Dotación Activa (Al {fecha_final})", resumen_activos, is_crosstab=True)
 
     pdf.add_page()
     pdf.set_font("Arial", "B", 14)
     pdf.set_text_color(0, 51, 102)
-    pdf.cell(0, 10, f"Novedades del Período: {rango_fechas_str}", ln=True)
+    pdf.cell(0, 10, "Detalle de Novedades", ln=True)
     pdf.set_font("Arial", "", 12); pdf.set_text_color(0, 0, 0)
     pdf.cell(0, 8, f"- Cantidad de Altas: {len(df_altas)}", ln=True)
     pdf.cell(0, 8, f"- Cantidad de Bajas: {len(df_bajas)}", ln=True)
@@ -226,7 +270,6 @@ with tab2:
         bajas_por_motivo_full = df_bajas_general_raw['Motivo de la medida'].value_counts().to_frame('Cantidad')
         if not bajas_por_motivo_full.empty: bajas_por_motivo_full.loc['Total'] = bajas_por_motivo_full.sum()
 
-        # --- MEJORA ESTÉTICA: INDICADORES CLAVE (KPIs) ---
         st.subheader("Indicadores Principales")
         col1, col2, col3 = st.columns(3)
         col1.metric("Dotación Activa Total", f"{resumen_activos_full.loc['Total', 'Total']:,}".replace(',', '.'))
