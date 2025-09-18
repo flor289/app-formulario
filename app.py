@@ -246,6 +246,7 @@ with tab1:
 
             if proceder:
                 activos_legajos_viejos = set(df_activos_raw['Nº pers.'])
+                
                 df_bajas_raw = df_base[df_base['Nº pers.'].isin(activos_legajos_viejos) & (df_base['Status ocupación'] == 'Dado de baja')].copy()
                 df_altas_raw = df_base[~df_base['Nº pers.'].isin(activos_legajos_viejos) & (df_base['Status ocupación'] == 'Activo')].copy()
                 
