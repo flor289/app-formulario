@@ -42,8 +42,8 @@ class PDF(FPDF):
         self.ln(5)
 
     def draw_kpi_box(self, title, value, color, x, y):
-        kpi_width = 85
-        kpi_height = 20
+        kpi_width = 80 # Reducido
+        kpi_height = 20 # Reducido
         self.set_xy(x, y)
         
         self.set_fill_color(*color)
@@ -130,10 +130,17 @@ def crear_pdf_reporte(titulo_reporte, rango_fechas_str, df_altas, df_bajas, baja
     
     pdf.draw_section_title(f"Indicadores del Período: {rango_fechas_str}")
     total_activos_val = f"{resumen_activos.loc['Total', 'Total']:,}".replace(',', '.') if not resumen_activos.empty else "0"
-    pdf.draw_kpi_box("Dotación Activa Total", total_activos_val, (173, 216, 230), pdf.get_x(), pdf.get_y())
-    pdf.draw_kpi_box("Altas del Período", str(len(df_altas)), (144, 238, 144), pdf.get_x() + 95, pdf.get_y())
-    pdf.draw_kpi_box("Bajas del Período", str(len(df_bajas)), (250, 128, 114), pdf.get_x() + 190, pdf.get_y())
-    pdf.ln(30)
+    
+    # Coordenadas calculadas para alinear
+    x1 = pdf.l_margin
+    x2 = x1 + 80 + 10 # 80 de ancho + 10 de espacio
+    x3 = x2 + 80 + 10
+    y = pdf.get_y()
+
+    pdf.draw_kpi_box("Dotación Activa Total", total_activos_val, (200, 200, 200), x1, y)
+    pdf.draw_kpi_box("Altas del Período", str(len(df_altas)), (200, 200, 200), x2, y)
+    pdf.draw_kpi_box("Bajas del Período", str(len(df_bajas)), (200, 200, 200), x3, y)
+    pdf.ln(25)
     
     fecha_final = rango_fechas_str.split(' - ')[-1]
     pdf.draw_table("Resumen de Bajas", resumen_bajas, is_crosstab=True)
@@ -149,6 +156,7 @@ def crear_pdf_reporte(titulo_reporte, rango_fechas_str, df_altas, df_bajas, baja
     return bytes(pdf.output())
 
 def procesar_archivo_base(archivo_cargado, sheet_name='BaseQuery'):
+    # ... (El resto de las funciones auxiliares no cambian) ...
     df_base = pd.read_excel(archivo_cargado, sheet_name=sheet_name, engine='openpyxl')
     df_base.rename(columns={'Gr.prof.': 'Categoría', 'División de personal': 'Línea'}, inplace=True)
     for col in ['Fecha', 'Desde', 'Fecha nac.']:
@@ -161,6 +169,7 @@ def procesar_archivo_base(archivo_cargado, sheet_name='BaseQuery'):
     return df_base
 
 def formatear_y_procesar_novedades(df_altas_raw, df_bajas_raw):
+    # ... (Esta función no cambia) ...
     df_bajas = df_bajas_raw.copy()
     if not df_bajas.empty:
         df_bajas['Antigüedad'] = ((datetime.now() - df_bajas['Fecha']) / pd.Timedelta(days=365.25)).fillna(0).astype(int)
@@ -178,6 +187,7 @@ def formatear_y_procesar_novedades(df_altas_raw, df_bajas_raw):
     return df_altas, df_bajas
 
 def filtrar_novedades_por_fecha(df_base_para_filtrar, fecha_inicio, fecha_fin):
+    # ... (Esta función no cambia) ...
     df = df_base_para_filtrar.copy()
     altas_filtradas = df[(df['Fecha'] >= fecha_inicio) & (df['Fecha'] <= fecha_fin)].copy()
     df_bajas_potenciales = df[df['Status ocupación'] == 'Dado de baja'].copy()
@@ -191,6 +201,7 @@ def filtrar_novedades_por_fecha(df_base_para_filtrar, fecha_inicio, fecha_fin):
     return altas_filtradas, bajas_filtradas
 
 def calcular_activos_a_fecha(df_base, fecha_fin):
+    # ... (Esta función no cambia) ...
     df = df_base.copy()
     df = df[df['Fecha'] <= fecha_fin]
     
@@ -208,6 +219,7 @@ def calcular_activos_a_fecha(df_base, fecha_fin):
     return activos_en_fecha
 
 # --- INTERFAZ DE LA APP ---
+# El resto de la interfaz no necesita cambios
 st.set_page_config(page_title="Dashboard de Dotación", layout="wide")
 st.markdown("""<style>.main .block-container { padding-top: 2rem; padding-bottom: 2rem; background-color: #f0f2f6; } h1, h2, h3 { color: #003366; } div.stDownloadButton > button { background-color: #28a745; color: white; border-radius: 5px; font-weight: bold; }</style>""", unsafe_allow_html=True)
 st.title("📊 Dashboard de Control de Dotación")
