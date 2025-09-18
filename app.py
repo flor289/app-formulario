@@ -219,56 +219,72 @@ with tab1:
             st.success("Archivo cargado y procesado.")
             
             st.markdown("---")
-            st.subheader("Opcional: Define un Período para los Títulos del PDF")
-            st.write("Si dejas los campos vacíos, se usará la fecha de hoy.")
-            col1, col2 = st.columns(2)
-            fecha_inicio = col1.date_input("Fecha de Inicio del Período", value=None, key="fecha_inicio")
-            fecha_fin = col2.date_input("Fecha de Fin del Período", value=None, key="fecha_fin")
-
-            if fecha_inicio and fecha_fin:
+            st.subheader("Configuración de Títulos para el Reporte PDF")
+            
+            tipo_reporte_sel = st.selectbox(
+                "Selecciona el tipo de período para el título:",
+                ("Diario", "Semanal", "Mensual")
+            )
+            
+            fecha_inicio = None
+            fecha_fin = None
+            
+            if tipo_reporte_sel != "Diario":
+                col1, col2 = st.columns(2)
+                fecha_inicio = col1.date_input("Fecha de Inicio del Período", value=None, key="fecha_inicio")
+                fecha_fin = col2.date_input("Fecha de Fin del Período", value=None, key="fecha_fin")
+            
+            # Condición para continuar: Si es Diario, o si es Semanal/Mensual Y las fechas están puestas.
+            proceder = False
+            if tipo_reporte_sel == "Diario":
+                rango_fechas_str = datetime.now().strftime('%d/%m/%Y')
+                nombre_archivo_fecha = datetime.now().strftime('%Y%m%d')
+                titulo_reporte = "Resumen Diario de Dotación"
+                proceder = True
+            elif fecha_inicio and fecha_fin:
                 if fecha_inicio > fecha_fin:
                     st.error("La fecha de inicio no puede ser posterior a la fecha de fin.")
                     st.stop()
                 rango_fechas_str = f"{fecha_inicio.strftime('%d/%m/%Y')} - {fecha_fin.strftime('%d/%m/%Y')}"
-                nombre_archivo_fecha = f"Periodo_{fecha_inicio.strftime('%Y%m%d')}_{fecha_fin.strftime('%Y%m%d')}"
-                titulo_reporte = "Resumen de Dotación por Período"
+                nombre_archivo_fecha = f"{tipo_reporte_sel}_{fecha_inicio.strftime('%Y%m%d')}"
+                titulo_reporte = f"Resumen {tipo_reporte_sel} de Dotación"
+                proceder = True
             else:
-                rango_fechas_str = datetime.now().strftime('%d/%m/%Y')
-                nombre_archivo_fecha = datetime.now().strftime('%Y%m%d')
-                titulo_reporte = "Resumen Diario de Dotación"
+                st.info(f"Por favor, selecciona un rango de fechas para generar el reporte {tipo_reporte_sel}.")
 
-            activos_legajos_viejos = set(df_activos_raw['Nº pers.'])
-            todos_legajos_nuevos = set(df_base['Nº pers.'])
-            df_bajas_raw = df_base[df_base['Nº pers.'].isin(activos_legajos_viejos) & (df_base['Status ocupación'] == 'Dado de baja')].copy()
-            df_altas_raw = df_base[~df_base['Nº pers.'].isin(activos_legajos_viejos) & (df_base['Status ocupación'] == 'Activo')].copy()
-            legajos_desaparecidos = activos_legajos_viejos - todos_legajos_nuevos
-            df_desaparecidos_raw = pd.DataFrame(legajos_desaparecidos, columns=['Nº pers.'])
-            
-            if not df_bajas_raw.empty: df_bajas_raw['Desde'] = df_bajas_raw['Desde'] - pd.Timedelta(days=1)
-            
-            df_altas, df_bajas, df_desaparecidos = formatear_y_procesar_novedades(df_altas_raw, df_bajas_raw, df_desaparecidos_raw)
-            
-            st.session_state.df_altas = df_altas
-            st.session_state.df_bajas = df_bajas
-            st.session_state.df_desaparecidos = df_desaparecidos
-            
-            resumen_activos = pd.crosstab(df_base[df_base['Status ocupación'] == 'Activo']['Categoría'], df_base[df_base['Status ocupación'] == 'Activo']['Línea'], margins=True, margins_name="Total")
-            resumen_bajas = pd.crosstab(df_bajas_raw['Categoría'], df_bajas_raw['Línea'], margins=True, margins_name="Total")
-            resumen_altas = pd.crosstab(df_altas_raw['Categoría'], df_altas_raw['Línea'], margins=True, margins_name="Total")
-            bajas_por_motivo = df_bajas_raw['Motivo de la medida'].value_counts().to_frame('Cantidad')
-            if not bajas_por_motivo.empty: bajas_por_motivo.loc['Total'] = bajas_por_motivo.sum()
+            if proceder:
+                activos_legajos_viejos = set(df_activos_raw['Nº pers.'])
+                todos_legajos_nuevos = set(df_base['Nº pers.'])
+                df_bajas_raw = df_base[df_base['Nº pers.'].isin(activos_legajos_viejos) & (df_base['Status ocupación'] == 'Dado de baja')].copy()
+                df_altas_raw = df_base[~df_base['Nº pers.'].isin(activos_legajos_viejos) & (df_base['Status ocupación'] == 'Activo')].copy()
+                legajos_desaparecidos = activos_legajos_viejos - todos_legajos_nuevos
+                df_desaparecidos_raw = pd.DataFrame(legajos_desaparecidos, columns=['Nº pers.'])
+                
+                if not df_bajas_raw.empty: df_bajas_raw['Desde'] = df_bajas_raw['Desde'] - pd.Timedelta(days=1)
+                
+                df_altas, df_bajas, df_desaparecidos = formatear_y_procesar_novedades(df_altas_raw, df_bajas_raw, df_desaparecidos_raw)
+                
+                st.session_state.df_altas = df_altas
+                st.session_state.df_bajas = df_bajas
+                st.session_state.df_desaparecidos = df_desaparecidos
+                
+                resumen_activos = pd.crosstab(df_base[df_base['Status ocupación'] == 'Activo']['Categoría'], df_base[df_base['Status ocupación'] == 'Activo']['Línea'], margins=True, margins_name="Total")
+                resumen_bajas = pd.crosstab(df_bajas_raw['Categoría'], df_bajas_raw['Línea'], margins=True, margins_name="Total")
+                resumen_altas = pd.crosstab(df_altas_raw['Categoría'], df_altas_raw['Línea'], margins=True, margins_name="Total")
+                bajas_por_motivo = df_bajas_raw['Motivo de la medida'].value_counts().to_frame('Cantidad')
+                if not bajas_por_motivo.empty: bajas_por_motivo.loc['Total'] = bajas_por_motivo.sum()
 
-            pdf_bytes = crear_pdf_reporte(titulo_reporte, rango_fechas_str, df_altas, df_bajas, bajas_por_motivo.reset_index(), resumen_altas, resumen_bajas, resumen_activos, df_desaparecidos=df_desaparecidos)
-            st.download_button(label="📄 Descargar Reporte en PDF", data=pdf_bytes, file_name=f"Reporte_Dotacion_{nombre_archivo_fecha}.pdf", mime="application/pdf")
-            st.markdown("---")
+                pdf_bytes = crear_pdf_reporte(titulo_reporte, rango_fechas_str, df_altas, df_bajas, bajas_por_motivo.reset_index(), resumen_altas, resumen_bajas, resumen_activos, df_desaparecidos=df_desaparecidos)
+                st.download_button(label="📄 Descargar Reporte en PDF", data=pdf_bytes, file_name=f"Reporte_Dotacion_{nombre_archivo_fecha}.pdf", mime="application/pdf")
+                st.markdown("---")
 
-            st.subheader(f"Altas ({len(df_altas)})"); st.dataframe(df_altas, hide_index=True)
-            st.subheader(f"Bajas ({len(df_bajas)})"); st.dataframe(df_bajas, hide_index=True)
-            
-            if not df_desaparecidos.empty:
-                st.subheader(f"Cambios Organizacionales ({len(df_desaparecidos)})")
-                st.warning("Los siguientes legajos estaban en la lista de activos anterior pero no se encontraron en el reporte actual.")
-                st.dataframe(df_desaparecidos, hide_index=True)
+                st.subheader(f"Altas ({len(df_altas)})"); st.dataframe(df_altas, hide_index=True)
+                st.subheader(f"Bajas ({len(df_bajas)})"); st.dataframe(df_bajas, hide_index=True)
+                
+                if not df_desaparecidos.empty:
+                    st.subheader(f"Cambios Organizacionales ({len(df_desaparecidos)})")
+                    st.warning("Los siguientes legajos estaban en la lista de activos anterior pero no se encontraron en el reporte actual.")
+                    st.dataframe(df_desaparecidos, hide_index=True)
 
         except Exception as e:
             st.error(f"Ocurrió un error en el archivo: {e}")
