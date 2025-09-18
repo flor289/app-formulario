@@ -46,22 +46,18 @@ class PDF(FPDF):
         kpi_height = 20
         self.set_xy(x, y)
         
-        # Borde de color superior
         self.set_fill_color(*color)
         self.cell(kpi_width, 2, "", fill=True, ln=False, border=0)
         
-        # Contenedor principal
         self.set_xy(x, y + 2)
         self.set_fill_color(*COLOR_GRIS_FONDO)
         self.cell(kpi_width, kpi_height - 2, "", border=1, fill=True)
         
-        # Texto del título
         self.set_xy(x, y + 5)
         self.set_font('Arial', '', 11)
         self.set_text_color(*COLOR_TEXTO_CUERPO)
         self.cell(kpi_width, 8, title, align='C')
         
-        # Valor del KPI
         self.set_xy(x, y + 12)
         self.set_font('Arial', 'B', 20)
         self.set_text_color(*COLOR_TEXTO_TITULO)
@@ -90,7 +86,6 @@ class PDF(FPDF):
             scaling_factor = self.page_width / total_width
             widths = {k: v * scaling_factor for k, v in widths.items()}
 
-        # Dibujar cabecera de la tabla
         self.set_font("Arial", "B", 9)
         self.set_fill_color(*COLOR_FONDO_CABECERA_TABLA)
         self.set_text_color(255, 255, 255)
@@ -98,7 +93,6 @@ class PDF(FPDF):
             self.cell(widths[col], 8, str(col), 0, 0, "C", True)
         self.ln()
 
-        # Dibujar filas de la tabla
         self.set_text_color(*COLOR_TEXTO_CUERPO)
         self.set_draw_color(*COLOR_GRIS_LINEA)
         self.set_line_width(0.2)
@@ -134,7 +128,6 @@ def crear_pdf_reporte(titulo_reporte, rango_fechas_str, df_altas, df_bajas, baja
     pdf.report_title = titulo_reporte
     pdf.add_page()
     
-    # --- KPIs ---
     pdf.draw_section_title(f"Indicadores del Período: {rango_fechas_str}")
     total_activos_val = f"{resumen_activos.loc['Total', 'Total']:,}".replace(',', '.') if not resumen_activos.empty else "0"
     pdf.draw_kpi_box("Dotación Activa Total", total_activos_val, (173, 216, 230), pdf.get_x(), pdf.get_y())
@@ -142,13 +135,11 @@ def crear_pdf_reporte(titulo_reporte, rango_fechas_str, df_altas, df_bajas, baja
     pdf.draw_kpi_box("Bajas del Período", str(len(df_bajas)), (250, 128, 114), pdf.get_x() + 190, pdf.get_y())
     pdf.ln(30)
     
-    # --- Tablas de Resumen ---
     fecha_final = rango_fechas_str.split(' - ')[-1]
     pdf.draw_table("Resumen de Bajas", resumen_bajas, is_crosstab=True)
     pdf.draw_table("Resumen de Altas", resumen_altas, is_crosstab=True)
     pdf.draw_table(f"Composición de la Dotación Activa (Al {fecha_final})", resumen_activos, is_crosstab=True)
 
-    # --- Página de Detalles ---
     pdf.add_page()
     pdf.draw_section_title("Detalle de Novedades")
     if not df_altas.empty: pdf.draw_table("Detalle de Altas", df_altas[['Nº pers.', 'Apellido', 'Nombre de pila', 'Fecha nac.', 'Fecha', 'Línea', 'Categoría']])
@@ -158,7 +149,6 @@ def crear_pdf_reporte(titulo_reporte, rango_fechas_str, df_altas, df_bajas, baja
     return bytes(pdf.output())
 
 def procesar_archivo_base(archivo_cargado, sheet_name='BaseQuery'):
-    # ... (El resto de las funciones auxiliares no cambian) ...
     df_base = pd.read_excel(archivo_cargado, sheet_name=sheet_name, engine='openpyxl')
     df_base.rename(columns={'Gr.prof.': 'Categoría', 'División de personal': 'Línea'}, inplace=True)
     for col in ['Fecha', 'Desde', 'Fecha nac.']:
@@ -218,7 +208,6 @@ def calcular_activos_a_fecha(df_base, fecha_fin):
     return activos_en_fecha
 
 # --- INTERFAZ DE LA APP ---
-# El resto de la interfaz de Streamlit no necesita cambios, por lo que se mantiene igual
 st.set_page_config(page_title="Dashboard de Dotación", layout="wide")
 st.markdown("""<style>.main .block-container { padding-top: 2rem; padding-bottom: 2rem; background-color: #f0f2f6; } h1, h2, h3 { color: #003366; } div.stDownloadButton > button { background-color: #28a745; color: white; border-radius: 5px; font-weight: bold; }</style>""", unsafe_allow_html=True)
 st.title("📊 Dashboard de Control de Dotación")
@@ -341,4 +330,37 @@ with tab4:
 
     if archivo_para_men:
         try:
-            sheet_name_men = 'Sheet1' i
+            sheet_name_men = 'Sheet1' if uploader_men else 'BaseQuery'
+            df_base_men = procesar_archivo_base(archivo_para_men, sheet_name=sheet_name_men)
+            
+            today = datetime.now()
+            dflt_start = today.replace(day=1); dflt_end = (dflt_start + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+            
+            col1, col2 = st.columns(2)
+            with col1: start_date_men = st.date_input("Fecha de inicio", dflt_start, key="mensual_inicio")
+            with col2: end_date_men = st.date_input("Fecha de fin", dflt_end, key="mensual_fin")
+
+            if start_date_men and end_date_men and start_date_men <= end_date_men:
+                rango_str_men = f"{start_date_men.strftime('%d/%m/%Y')} - {end_date_men.strftime('%d/%m/%Y')}"
+                st.write(f"**Período a analizar:** {rango_str_men}")
+
+                end_date_men_dt = pd.to_datetime(end_date_men)
+                df_altas_men_raw, df_bajas_men_raw = filtrar_novedades_por_fecha(df_base_men, pd.to_datetime(start_date_men), end_date_men_dt)
+                df_altas_men, df_bajas_men = formatear_y_procesar_novedades(df_altas_men_raw, df_bajas_men_raw)
+                
+                df_activos_men = calcular_activos_a_fecha(df_base_men, end_date_men_dt)
+                resumen_activos_men = pd.crosstab(df_activos_men['Categoría'], df_activos_men['Línea'], margins=True, margins_name="Total")
+                resumen_bajas_men = pd.crosstab(df_bajas_men_raw['Categoría'], df_bajas_men_raw['Línea'], margins=True, margins_name="Total")
+                resumen_altas_men = pd.crosstab(df_altas_men_raw['Categoría'], df_altas_men_raw['Línea'], margins=True, margins_name="Total")
+                bajas_motivo_men = df_bajas_men_raw['Motivo de la medida'].value_counts().to_frame('Cantidad')
+                if not bajas_motivo_men.empty: bajas_motivo_men.loc['Total'] = bajas_motivo_men.sum()
+
+                pdf_bytes_men = crear_pdf_reporte("Resumen Mensual de Dotación", rango_str_men, df_altas_men, df_bajas_men, bajas_motivo_men.reset_index(), resumen_altas_men, resumen_bajas_men, resumen_activos_men)
+                st.download_button("📄 Descargar Reporte Mensual en PDF", pdf_bytes_men, f"Reporte_Mensual_{start_date_men.strftime('%Y%m')}.pdf", "application/pdf", key="btn_men")
+            elif start_date_men > end_date_men:
+                st.error("La fecha de inicio no puede ser posterior a la fecha de fin.")
+        except Exception as e:
+            st.error(f"Ocurrió un error en el archivo para el reporte mensual: {e}")
+            st.warning("Verifica que el archivo y la pestaña ('Sheet1' o 'BaseQuery') sean correctos.")
+    else:
+        st.info("Sube un archivo en la pestaña 'Novedades (General)' o aquí mismo para generar un reporte.")
