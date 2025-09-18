@@ -1,170 +1,321 @@
 import streamlit as st
 import pandas as pd
-from io import BytesIO
-import zipfile
 from fpdf import FPDF
-import textwrap
+from datetime import datetime, timedelta
+import io
 
-# --- CONFIGURACIÓN DE LA PÁGINA ---
-st.set_page_config(page_title="Generador PDI Estable", page_icon="✅", layout="centered")
-st.title("✅ Generador de PDI (Versión Estable)")
-st.write("Esta aplicación genera un PDI en PDF a partir de un archivo Excel que subas.")
+# --- CLASE MEJORADA PARA CREAR EL PDF EJECUTIVO ---
+class PDF(FPDF):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.page_width = self.w - 2 * self.l_margin
+        self.report_title = "Resumen de Dotación"
+        self.table_header_data = None 
 
-# --- ESTRUCTURA DE DATOS ---
-SECCIONES_PDI = {
-    "1. Datos Personales y Laborales": [
-        ("Apellido y Nombre", "Apellido y Nombre"),
-        ("DNI", "DNI"),
-        ("Correo electrónico", "Correo electrónico"),
-        ("Número de contacto", "Número de contacto"),
-        ("Edad", "Edad"),
-        ("Posición actual", "Posición actual"),
-        ("Fecha de ingreso", "Fecha de ingreso a la empresa"),
-        ("Lugar de trabajo", "Lugar de trabajo")
-    ],
-    "2. Formación y Nivel Educativo": [
-        ("Nivel educativo", "Nivel educativo alcanzado"),
-        ("Carrera Cursada/En Curso", "Carrera cursada/en curso"),
-        ("Título obtenido", "Título obtenido (si corresponde)"),
-        ("Otras capacitaciones", "Otras capacitaciones realizadas fuera de la empresa finalizadas (Mencionar)"),
-        ("¿Está relacionado con su formación académica?", "¿está relacionado con su formación académica?")
-    ],
-    "3. Interés de Desarrollo": [
-        ("¿Le interesaría desarrollar su carrera dentro de la empresa?", '¿Le interesaría desarrollar su carrera dentro de la empresa?'),
-        ("Área de interés futura", "¿En qué área de la empresa le gustaría desarrollarse en el futuro?"),
-        ("Puesto al que aspira", "¿Qué tipo de puesto aspira ocupar en el futuro?"),
-        ("Motivaciones para cambiar", "¿Cuáles son los principales factores que lo motivarían en su decisión de cambiar de posición  dentro de la empresa? (Seleccione hasta 3 opciones)")
-    ],
-    "4. Necesidades de Capacitación": [
-        ("Competencias a capacitar", "¿En qué competencias o conocimientos le gustaría capacitarse para mejorar sus oportunidades de desarrollo?"),
-        ("Especificación de interés", "A partir de su respuesta anterior, por favor, especifique en qué competencia o conocimiento le gustaría capacitarse")
-    ],
-    "5. Fortalezas y Obstáculos": [
-        ("Fortalezas profesionales", "¿Cuáles considera que son sus principales fortalezas profesionales?"),
-        ("Obstáculos para el desarrollo", "¿Qué obstáculos encuentra para su desarrollo profesional dentro de la empresa?")
-    ],
-    "6. Proyección y Crecimiento": [
-        ("¿Le gustaría recibir asesoramiento sobre su plan de desarrollo profesional?", "¿Le gustaría recibir asesoramiento sobre su plan de desarrollo profesional dentro de la empresa?"),
-        ("¿Estaría dispuesto a asumir nuevos desafíos/responsabilidades?", "¿Estaría dispuesto a asumir nuevas responsabilidades o desafíos para avanzar en su carrera dentro de la empresa?"),
-        ("Comentarios adicionales", "Si desea agregar algún comentario sobre su desarrollo profesional en la empresa, puede hacerlo aquí:")
+    def header(self):
+        self.set_font("Arial", "B", 16)
+        self.cell(0, 10, self.report_title, 0, 0, "C")
+        self.ln(15)
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_font("Arial", "I", 8)
+        self.cell(0, 10, str(self.page_no()), 0, 0, "C")
+
+    def _draw_table_header(self):
+        if self.table_header_data:
+            self.set_font("Arial", "B", self.table_header_data['font_size'])
+            self.set_fill_color(70, 130, 180)
+            self.set_text_color(255, 255, 255)
+            for col in self.table_header_data['df_columns']:
+                self.cell(self.table_header_data['widths'][col], 8, str(col), 1, 0, "C", True)
+            self.ln()
+            self.set_text_color(0, 0, 0)
+
+    def draw_table(self, title, df_original, is_crosstab=False):
+        if df_original.empty or (is_crosstab and len(df_original) <= 1 and not (len(df_original) == 1 and df_original.index[0] != "Total")):
+             return
+        
+        df = df_original.copy()
+        if is_crosstab: df = df.replace(0, '-')
+        if df.index.name: df.reset_index(inplace=True)
+        
+        if self.get_y() + (8 * (len(df) + 1) + 10) > self.h - self.b_margin: self.add_page(orientation=self.cur_orientation)
+
+        self.set_font("Arial", "B", 14)
+        self.set_text_color(0, 51, 102)
+        self.cell(0, 10, title, ln=True, align="L")
+        self.ln(2)
+
+        df_formatted = df.copy()
+        for col in df_formatted.columns:
+             if pd.api.types.is_numeric_dtype(df_formatted[col]) and col not in ['Nº pers.', 'Antigüedad']:
+                  df_formatted[col] = df_formatted[col].apply(lambda x: f"{x:,.0f}".replace(',', '.') if isinstance(x, (int, float)) else x)
+
+        widths = {col: max(self.get_string_width(str(col)) + 8, df_formatted[col].astype(str).apply(lambda x: self.get_string_width(x)).max() + 8) for col in df_formatted.columns}
+        total_width = sum(widths.values())
+        font_size = 9
+        if total_width > self.page_width:
+            scaling_factor = self.page_width / total_width
+            widths = {k: v * scaling_factor for k, v in widths.items()}
+            font_size = 7
+
+        self.table_header_data = { 'widths': widths, 'font_size': font_size, 'df_columns': df_formatted.columns }
+        self._draw_table_header()
+        
+        for _, row in df_formatted.iterrows():
+            if self.get_y() + 8 > self.h - self.b_margin:
+                self.add_page(orientation=self.cur_orientation)
+                self._draw_table_header()
+
+            is_total_row = "Total" in str(row.iloc[0])
+            if is_total_row: self.set_font("Arial", "B", font_size)
+            else: self.set_font("Arial", "", font_size)
+
+            for col in df_formatted.columns: self.cell(widths[col], 8, str(row[col]), 1, 0, "C")
+            self.ln()
+        
+        self.table_header_data = None; self.ln(10)
+
+def crear_pdf_reporte(titulo_reporte, rango_fechas_str, df_altas, df_bajas, bajas_por_motivo, resumen_altas, resumen_bajas, resumen_activos):
+    pdf = PDF(orientation='L', unit='mm', format='A4')
+    pdf.report_title = titulo_reporte
+    pdf.add_page()
+    
+    fecha_final = rango_fechas_str.split(' - ')[-1]
+    pdf.draw_table(f"Resumen de Bajas (Período: {rango_fechas_str})", resumen_bajas, is_crosstab=True)
+    pdf.draw_table(f"Resumen de Altas (Período: {rango_fechas_str})", resumen_altas, is_crosstab=True)
+    pdf.draw_table(f"Composición de la Dotación Activa (Al {fecha_final})", resumen_activos, is_crosstab=True)
+
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 14)
+    pdf.set_text_color(0, 51, 102)
+    pdf.cell(0, 10, f"Novedades del Período: {rango_fechas_str}", ln=True)
+    pdf.set_font("Arial", "", 12); pdf.set_text_color(0, 0, 0)
+    pdf.cell(0, 8, f"- Cantidad de Altas: {len(df_altas)}", ln=True)
+    pdf.cell(0, 8, f"- Cantidad de Bajas: {len(df_bajas)}", ln=True)
+    pdf.ln(5)
+
+    if not df_altas.empty: pdf.draw_table("Detalle de Altas", df_altas[['Nº pers.', 'Apellido', 'Nombre de pila', 'Fecha nac.', 'Fecha', 'Línea', 'Categoría']])
+    if not df_bajas.empty: pdf.draw_table("Detalle de Bajas", df_bajas[['Nº pers.', 'Apellido', 'Nombre de pila', 'Motivo de la medida', 'Fecha nac.', 'Antigüedad', 'Desde', 'Línea', 'Categoría']])
+    if not bajas_por_motivo.empty: pdf.draw_table("Bajas por Motivo", bajas_por_motivo)
+
+    return bytes(pdf.output())
+
+def procesar_archivo_base(archivo_cargado, sheet_name='BaseQuery'):
+    df_base = pd.read_excel(archivo_cargado, sheet_name=sheet_name, engine='openpyxl')
+    df_base.rename(columns={'Gr.prof.': 'Categoría', 'División de personal': 'Línea'}, inplace=True)
+    for col in ['Fecha', 'Desde', 'Fecha nac.']:
+        if col in df_base.columns: df_base[col] = pd.to_datetime(df_base[col], errors='coerce')
+    
+    orden_lineas = ['ROCA', 'MITRE', 'SARMIENTO', 'SAN MARTIN', 'BELGRANO SUR', 'REGIONALES', 'CENTRAL']
+    orden_categorias = ['COOR.E.T', 'INST.TEC', 'INS.CERT', 'CON.ELEC', 'CON.DIES', 'AY.CON.H', 'AY.CONDU', 'ASP.AY.C']
+    df_base['Línea'] = pd.Categorical(df_base['Línea'], categories=orden_lineas, ordered=True)
+    df_base['Categoría'] = pd.Categorical(df_base['Categoría'], categories=orden_categorias, ordered=True)
+    return df_base
+
+def formatear_y_procesar_novedades(df_altas_raw, df_bajas_raw):
+    df_bajas = df_bajas_raw.copy()
+    if not df_bajas.empty:
+        df_bajas['Antigüedad'] = ((datetime.now() - df_bajas['Fecha']) / pd.Timedelta(days=365.25)).fillna(0).astype(int)
+        df_bajas['Fecha nac.'] = df_bajas['Fecha nac.'].dt.strftime('%d/%m/%Y')
+        df_bajas['Desde'] = df_bajas['Desde'].dt.strftime('%d/%m/%Y')
+    else:
+        df_bajas = pd.DataFrame(columns=['Nº pers.', 'Apellido', 'Nombre de pila', 'Motivo de la medida', 'Fecha nac.', 'Antigüedad', 'Desde', 'Línea', 'Categoría'])
+    
+    df_altas = df_altas_raw.copy()
+    if not df_altas.empty:
+        df_altas['Fecha'] = df_altas['Fecha'].dt.strftime('%d/%m/%Y')
+        df_altas['Fecha nac.'] = df_altas['Fecha nac.'].dt.strftime('%d/%m/%Y')
+    else:
+        df_altas = pd.DataFrame(columns=['Nº pers.', 'Apellido', 'Nombre de pila', 'Fecha nac.', 'Fecha', 'Línea', 'Categoría'])
+    return df_altas, df_bajas
+
+def filtrar_novedades_por_fecha(df_base_para_filtrar, fecha_inicio, fecha_fin):
+    df = df_base_para_filtrar.copy()
+    altas_filtradas = df[(df['Fecha'] >= fecha_inicio) & (df['Fecha'] <= fecha_fin)].copy()
+    df_bajas_potenciales = df[df['Status ocupación'] == 'Dado de baja'].copy()
+    if not df_bajas_potenciales.empty:
+        df_bajas_potenciales['fecha_baja_corregida'] = df_bajas_potenciales['Desde'] - pd.Timedelta(days=1)
+        bajas_filtradas = df_bajas_potenciales[(df_bajas_potenciales['fecha_baja_corregida'] >= fecha_inicio) & (df_bajas_potenciales['fecha_baja_corregida'] <= fecha_fin)].copy()
+        if not bajas_filtradas.empty:
+            bajas_filtradas['Desde'] = bajas_filtradas['fecha_baja_corregida']
+    else:
+        bajas_filtradas = pd.DataFrame()
+    return altas_filtradas, bajas_filtradas
+
+def calcular_activos_a_fecha(df_base, fecha_fin):
+    df = df_base.copy()
+    df = df[df['Fecha'] <= fecha_fin]
+    
+    df_bajas = df[df['Status ocupación'] == 'Dado de baja'].copy()
+    if not df_bajas.empty:
+        df_bajas['fecha_baja_corregida'] = df_bajas['Desde'] - pd.Timedelta(days=1)
+        legajos_baja_despues_de_fecha = df_bajas[df_bajas['fecha_baja_corregida'] > fecha_fin]['Nº pers.']
+    else:
+        legajos_baja_despues_de_fecha = []
+
+    activos_en_fecha = df[
+        (df['Status ocupación'] == 'Activo') | 
+        (df['Nº pers.'].isin(legajos_baja_despues_de_fecha))
     ]
-}
+    return activos_en_fecha
 
-# --- FUNCIONES AUXILIARES ---
-def safe_text(text, width=100):
-    """Corta texto largo para que no rompa el PDF"""
-    if not isinstance(text, str):
-        text = str(text)
-    return "\n".join(textwrap.wrap(text, width=width, break_long_words=True))
+# --- INTERFAZ DE LA APP ---
+st.set_page_config(page_title="Dashboard de Dotación", layout="wide")
+st.markdown("""<style>.main .block-container { padding-top: 2rem; padding-bottom: 2rem; background-color: #f0f2f6; } h1, h2, h3 { color: #003366; } div.stDownloadButton > button { background-color: #28a745; color: white; border-radius: 5px; font-weight: bold; }</style>""", unsafe_allow_html=True)
+st.title("📊 Dashboard de Control de Dotación")
 
-def generar_pdf(datos_empleado):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_auto_page_break(auto=True, margin=15)
+tab1, tab2, tab3, tab4 = st.tabs(["▶️ Novedades (General)", "📈 Resúmenes (General)", "📅 Reporte Semanal", "📅 Reporte Mensual"])
 
-    # Título principal
-    pdf.set_font("Arial", "B", 16)
-    pdf.set_text_color(42, 92, 170)
-    pdf.cell(0, 10, 'PLAN DE DESARROLLO INDIVIDUAL (PDI)', 0, 1, 'C')
-    pdf.ln(10)
-    pdf.set_text_color(0, 0, 0)
+with tab1:
+    st.header("Análisis General por Comparación de Archivos")
+    st.info("Sube tu archivo Excel con las pestañas 'BaseQuery' y 'Activos' para ver las novedades generales.")
+    uploaded_file_general = st.file_uploader("Sube tu archivo Excel aquí", type=['xlsx'], key="main_uploader")
 
-    page_width = pdf.w - 2 * pdf.l_margin
+    if uploaded_file_general:
+        try:
+            st.session_state.uploaded_file_general = uploaded_file_general
+            df_base_general = procesar_archivo_base(uploaded_file_general, sheet_name='BaseQuery')
+            df_activos_general_raw = pd.read_excel(uploaded_file_general, sheet_name='Activos', engine='openpyxl')
+            st.session_state.df_base_general = df_base_general
+            st.session_state.df_activos_general_raw = df_activos_general_raw
+            st.success("Archivo general cargado y procesado.")
 
-    # Iteramos por secciones
-    for titulo_seccion, campos in SECCIONES_PDI.items():
-        pdf.set_font("Arial", "B", 12)
-        pdf.set_text_color(42, 92, 170)
-        pdf.cell(0, 10, titulo_seccion, 0, 1, 'L')
-        pdf.set_text_color(0, 0, 0)
+            activos_legajos = set(df_activos_general_raw['Nº pers.'])
+            df_bajas_general_raw = df_base_general[df_base_general['Nº pers.'].isin(activos_legajos) & (df_base_general['Status ocupación'] == 'Dado de baja')].copy()
+            df_altas_general_raw = df_base_general[~df_base_general['Nº pers.'].isin(activos_legajos) & (df_base_general['Status ocupación'] == 'Activo')].copy()
+            
+            if not df_bajas_general_raw.empty: df_bajas_general_raw['Desde'] = df_bajas_general_raw['Desde'] - pd.Timedelta(days=1)
+            
+            df_altas_general, df_bajas_general = formatear_y_procesar_novedades(df_altas_general_raw, df_bajas_general_raw)
+            st.session_state.df_altas_general, st.session_state.df_bajas_general = df_altas_general, df_bajas_general
+            
+            resumen_activos_full = pd.crosstab(df_base_general[df_base_general['Status ocupación'] == 'Activo']['Categoría'], df_base_general[df_base_general['Status ocupación'] == 'Activo']['Línea'], margins=True, margins_name="Total")
+            resumen_bajas_full = pd.crosstab(df_bajas_general_raw['Categoría'], df_bajas_general_raw['Línea'], margins=True, margins_name="Total")
+            resumen_altas_full = pd.crosstab(df_altas_general_raw['Categoría'], df_altas_general_raw['Línea'], margins=True, margins_name="Total")
+            bajas_por_motivo_full = df_bajas_general_raw['Motivo de la medida'].value_counts().to_frame('Cantidad')
+            if not bajas_por_motivo_full.empty: bajas_por_motivo_full.loc['Total'] = bajas_por_motivo_full.sum()
 
-        for etiqueta, columna in campos:
-            valor = str(datos_empleado.get(columna, 'N/A'))
+            pdf_bytes_general = crear_pdf_reporte("Resumen de Dotación", datetime.now().strftime('%d/%m/%Y'), df_altas_general, df_bajas_general, bajas_por_motivo_full.reset_index(), resumen_altas_full, resumen_bajas_full, resumen_activos_full)
+            st.download_button(label="📄 Descargar Reporte General (PDF)", data=pdf_bytes_general, file_name=f"Reporte_General_Dotacion_{datetime.now().strftime('%Y%m%d')}.pdf", mime="application/pdf")
+            st.markdown("---")
 
-            pdf.set_font("Arial", "B", 10)
-            pdf.multi_cell(page_width, 6, etiqueta + ":")
+            st.subheader(f"Altas ({len(df_altas_general)})"); st.dataframe(df_altas_general[['Nº pers.', 'Apellido', 'Nombre de pila', 'Fecha nac.', 'Fecha', 'Línea', 'Categoría']], hide_index=True)
+            st.subheader(f"Bajas ({len(df_bajas_general)})"); st.dataframe(df_bajas_general[['Nº pers.', 'Apellido', 'Nombre de pila', 'Motivo de la medida', 'Fecha nac.', 'Antigüedad', 'Desde', 'Línea', 'Categoría']], hide_index=True)
 
-            pdf.set_font("Arial", "", 10)
-            if "," in valor and len(valor) > 40:
-                items = [item.strip() for item in valor.split(",")]
-                texto_lista = "\n".join(f"- {item}" for item in items)
-                pdf.multi_cell(page_width, 5, safe_text(texto_lista))
-            else:
-                pdf.multi_cell(page_width, 6, safe_text(valor))
-            pdf.ln(3)
-        pdf.ln(6)
+        except Exception as e:
+            st.error(f"Ocurrió un error en el archivo general: {e}")
+            st.warning("Verifica que el archivo contenga las pestañas 'Activos' y 'BaseQuery'.")
 
-    # Sección adicional
-    pdf.add_page()
-    pdf.set_font("Arial", "B", 12)
-    pdf.set_text_color(42, 92, 170)
-    pdf.cell(0, 10, "7. Síntesis de la entrevista", 0, 1, 'L')
+with tab2:
+    st.header("Dashboard de Resúmenes (General)")
+    if 'df_base_general' in st.session_state:
+        df_base_general = st.session_state.df_base_general
+        df_activos_general_raw = st.session_state.df_activos_general_raw
+        df_altas_general = st.session_state.df_altas_general
+        df_bajas_general = st.session_state.df_bajas_general
+        
+        activos_legajos = set(df_activos_general_raw['Nº pers.'])
+        df_bajas_general_raw = df_base_general[df_base_general['Nº pers.'].isin(activos_legajos) & (df_base_general['Status ocupación'] == 'Dado de baja')].copy()
+        df_altas_general_raw = df_base_general[~df_base_general['Nº pers.'].isin(activos_legajos) & (df_base_general['Status ocupación'] == 'Activo')].copy()
 
-    return bytes(pdf.output(dest='S'))  # ahora es compatible con download_button
+        resumen_activos_full = pd.crosstab(df_base_general[df_base_general['Status ocupación'] == 'Activo']['Categoría'], df_base_general[df_base_general['Status ocupación'] == 'Activo']['Línea'], margins=True, margins_name="Total")
+        resumen_bajas_full = pd.crosstab(df_bajas_general_raw['Categoría'], df_bajas_general_raw['Línea'], margins=True, margins_name="Total")
+        resumen_altas_full = pd.crosstab(df_altas_general_raw['Categoría'], df_altas_general_raw['Línea'], margins=True, margins_name="Total")
+        bajas_por_motivo_full = df_bajas_general_raw['Motivo de la medida'].value_counts().to_frame('Cantidad')
+        if not bajas_por_motivo_full.empty: bajas_por_motivo_full.loc['Total'] = bajas_por_motivo_full.sum()
 
-# --- INTERFAZ PRINCIPAL ---
-uploaded_file = st.file_uploader("Sube tu archivo Excel con los datos de los empleados", type=["xlsx"])
+        # --- MEJORA ESTÉTICA: INDICADORES CLAVE (KPIs) ---
+        st.subheader("Indicadores Principales")
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Dotación Activa Total", f"{resumen_activos_full.loc['Total', 'Total']:,}".replace(',', '.'))
+        col2.metric("Altas del Período", len(df_altas_general))
+        col3.metric("Bajas del Período", len(df_bajas_general))
+        st.markdown("---")
+        
+        formatter = lambda x: f'{x:,.0f}'.replace(',', '.') if isinstance(x, (int, float)) else x
+        st.subheader("Composición de la Dotación Activa"); st.dataframe(resumen_activos_full.replace(0, '-').style.format(formatter))
+        st.subheader("Resumen de Novedades")
+        colA, colB = st.columns(2)
+        with colA: st.write("**Bajas por Categoría y Línea:**"); st.dataframe(resumen_bajas_full.replace(0, '-').style.format(formatter))
+        with colB: st.write("**Altas por Categoría y Línea:**"); st.dataframe(resumen_altas_full.replace(0, '-').style.format(formatter))
+        st.write("**Bajas por Motivo:**"); st.dataframe(bajas_por_motivo_full.style.format(formatter))
+    else:
+        st.info("Sube un archivo en la pestaña 'Novedades (General)' para ver los resúmenes.")
 
-if uploaded_file is not None:
-    try:
-        df = pd.read_excel(uploaded_file)
-        df.columns = [col.strip() for col in df.columns]
-        st.success("¡Archivo Excel cargado correctamente! ✅")
+with tab3:
+    st.header("Generador de Reportes Semanales (por fecha de evento)")
+    uploader_sem = st.file_uploader("Sube un archivo (pestaña 'Sheet1') o usa el general", type=['xlsx'], key="upload_sem")
+    archivo_para_sem = uploader_sem or st.session_state.get('uploaded_file_general')
 
-        columna_nombre = "Apellido y Nombre"
-        if columna_nombre not in df.columns and "Nombre" in df.columns:
-            columna_nombre = "Nombre"
+    if archivo_para_sem:
+        try:
+            sheet_name_sem = 'Sheet1' if uploader_sem else 'BaseQuery'
+            df_base_sem = procesar_archivo_base(archivo_para_sem, sheet_name=sheet_name_sem)
+            
+            start_date_sem = st.date_input("Fecha de inicio del reporte", datetime.now() - timedelta(days=7), key="semanal")
+            if start_date_sem:
+                end_date_sem = datetime.now()
+                rango_str_sem = f"{start_date_sem.strftime('%d/%m/%Y')} - {end_date_sem.strftime('%d/%m/%Y')}"
+                st.write(f"**Período a analizar:** {rango_str_sem}")
 
-        if columna_nombre in df.columns:
-            st.header("Generar PDF Individual")
-            empleados = df[columna_nombre].dropna().unique()
-            empleado_seleccionado = st.selectbox("Selecciona un empleado:", empleados)
+                df_altas_sem_raw, df_bajas_sem_raw = filtrar_novedades_por_fecha(df_base_sem, pd.to_datetime(start_date_sem), end_date_sem)
+                df_altas_sem, df_bajas_sem = formatear_y_procesar_novedades(df_altas_sem_raw, df_bajas_sem_raw)
+                
+                df_activos_sem = calcular_activos_a_fecha(df_base_sem, end_date_sem)
+                resumen_activos_sem = pd.crosstab(df_activos_sem['Categoría'], df_activos_sem['Línea'], margins=True, margins_name="Total")
+                resumen_bajas_sem = pd.crosstab(df_bajas_sem_raw['Categoría'], df_bajas_sem_raw['Línea'], margins=True, margins_name="Total")
+                resumen_altas_sem = pd.crosstab(df_altas_sem_raw['Categoría'], df_altas_sem_raw['Línea'], margins=True, margins_name="Total")
+                bajas_motivo_sem = df_bajas_sem_raw['Motivo de la medida'].value_counts().to_frame('Cantidad')
+                if not bajas_motivo_sem.empty: bajas_motivo_sem.loc['Total'] = bajas_motivo_sem.sum()
 
-            if empleado_seleccionado:
-                datos_empleado = df[df[columna_nombre] == empleado_seleccionado].iloc[0].to_dict()
-                if st.button(f"Generar PDF para {empleado_seleccionado}"):
-                    pdf_buffer = generar_pdf(datos_empleado)
-                    st.download_button(
-                        label="📥 Descargar PDF",
-                        data=pdf_buffer,
-                        file_name=f"PDI_{empleado_seleccionado.replace(' ', '_')}.pdf",
-                        mime="application/pdf"
-                    )
+                pdf_bytes_sem = crear_pdf_reporte("Resumen Semanal de Dotación", rango_str_sem, df_altas_sem, df_bajas_sem, bajas_motivo_sem.reset_index(), resumen_altas_sem, resumen_bajas_sem, resumen_activos_sem)
+                st.download_button("📄 Descargar Reporte Semanal en PDF", pdf_bytes_sem, f"Reporte_Semanal_{start_date_sem.strftime('%Y%m%d')}.pdf", "application/pdf", key="btn_sem")
+        except Exception as e:
+            st.error(f"Ocurrió un error en el archivo para el reporte semanal: {e}")
+            st.warning("Verifica que el archivo y la pestaña ('Sheet1' o 'BaseQuery') sean correctos.")
+    else:
+        st.info("Sube un archivo en la pestaña 'Novedades (General)' o aquí mismo para generar un reporte.")
 
-            st.divider()
+with tab4:
+    st.header("Generador de Reportes Mensuales (por fecha de evento)")
+    uploader_men = st.file_uploader("Sube un archivo (pestaña 'Sheet1') o usa el general", type=['xlsx'], key="upload_men")
+    archivo_para_men = uploader_men or st.session_state.get('uploaded_file_general')
 
-            st.header("Generar Todos los Formularios en un ZIP")
-            if st.button("🚀 Generar y Descargar ZIP con Todos los PDI"):
-                zip_buffer = BytesIO()
-                progress_bar = st.progress(0, text="Iniciando generación de PDFs...")
-                total_empleados = len(df)
+    if archivo_para_men:
+        try:
+            sheet_name_men = 'Sheet1' if uploader_men else 'BaseQuery'
+            df_base_men = procesar_archivo_base(archivo_para_men, sheet_name=sheet_name_men)
+            
+            today = datetime.now()
+            dflt_start = today.replace(day=1); dflt_end = (dflt_start + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+            
+            col1, col2 = st.columns(2)
+            with col1: start_date_men = st.date_input("Fecha de inicio", dflt_start, key="mensual_inicio")
+            with col2: end_date_men = st.date_input("Fecha de fin", dflt_end, key="mensual_fin")
 
-                with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                    for index, row in df.iterrows():
-                        nombre_empleado_raw = row.get(columna_nombre, f"Empleado_{index+1}")
-                        pdf_buffer = generar_pdf(row.to_dict())
-                        nombre_archivo = f"PDI_{str(nombre_empleado_raw).replace(' ', '_').replace(',', '')}.pdf"
-                        zipf.writestr(nombre_archivo, pdf_buffer)
-                        progreso_actual = (index + 1) / total_empleados
-                        progress_bar.progress(progreso_actual, text=f"Generando PDF: {nombre_empleado_raw} ({index+1}/{total_empleados})")
+            if start_date_men and end_date_men and start_date_men <= end_date_men:
+                rango_str_men = f"{start_date_men.strftime('%d/%m/%Y')} - {end_date_men.strftime('%d/%m/%Y')}"
+                st.write(f"**Período a analizar:** {rango_str_men}")
 
-                progress_bar.empty()
-                st.download_button(
-                    label="📥 Descargar Archivo ZIP",
-                    data=zip_buffer.getvalue(),
-                    file_name="Todos_los_PDI.zip",
-                    mime="application/zip"
-                )
-        else:
-            st.error(f"Error: No se encontró la columna '{columna_nombre}' o 'Nombre' en tu archivo Excel.")
-            st.write("Columnas encontradas en tu archivo:")
-            st.write(df.columns.tolist())
+                end_date_men_dt = pd.to_datetime(end_date_men)
+                df_altas_men_raw, df_bajas_men_raw = filtrar_novedades_por_fecha(df_base_men, pd.to_datetime(start_date_men), end_date_men_dt)
+                df_altas_men, df_bajas_men = formatear_y_procesar_novedades(df_altas_men_raw, df_bajas_men_raw)
+                
+                df_activos_men = calcular_activos_a_fecha(df_base_men, end_date_men_dt)
+                resumen_activos_men = pd.crosstab(df_activos_men['Categoría'], df_activos_men['Línea'], margins=True, margins_name="Total")
+                resumen_bajas_men = pd.crosstab(df_bajas_men_raw['Categoría'], df_bajas_men_raw['Línea'], margins=True, margins_name="Total")
+                resumen_altas_men = pd.crosstab(df_altas_men_raw['Categoría'], df_altas_men_raw['Línea'], margins=True, margins_name="Total")
+                bajas_motivo_men = df_bajas_men_raw['Motivo de la medida'].value_counts().to_frame('Cantidad')
+                if not bajas_motivo_men.empty: bajas_motivo_men.loc['Total'] = bajas_motivo_men.sum()
 
-    except Exception as e:
-        st.error(f"Ocurrió un error inesperado: {e}")
-
-
-
-
-
-
+                pdf_bytes_men = crear_pdf_reporte("Resumen Mensual de Dotación", rango_str_men, df_altas_men, df_bajas_men, bajas_motivo_men.reset_index(), resumen_altas_men, resumen_bajas_men, resumen_activos_men)
+                st.download_button("📄 Descargar Reporte Mensual en PDF", pdf_bytes_men, f"Reporte_Mensual_{start_date_men.strftime('%Y%m')}.pdf", "application/pdf", key="btn_men")
+            elif start_date_men > end_date_men:
+                st.error("La fecha de inicio no puede ser posterior a la fecha de fin.")
+        except Exception as e:
+            st.error(f"Ocurrió un error en el archivo para el reporte mensual: {e}")
+            st.warning("Verifica que el archivo y la pestaña ('Sheet1' o 'BaseQuery') sean correctos.")
+    else:
+        st.info("Sube un archivo en la pestaña 'Novedades (General)' o aquí mismo para generar un reporte.")
