@@ -143,18 +143,14 @@ def crear_pdf_reporte(titulo_reporte, rango_fechas_str, df_altas, df_bajas, baja
     pdf.ln(22)
     
     fecha_final = rango_fechas_str.split(' - ')[-1]
-    # --- CORRECCIÓN AQUÍ ---
     pdf.draw_table(f"Resumen de Bajas (Período: {rango_fechas_str})", resumen_bajas, is_crosstab=True)
     pdf.draw_table(f"Resumen de Altas (Período: {rango_fechas_str})", resumen_altas, is_crosstab=True)
     pdf.draw_table(f"Composición de la Dotación Activa (Al {fecha_final})", resumen_activos, is_crosstab=True)
 
-    # El detalle de novedades ahora comienza aquí
-    if not df_altas.empty or not df_bajas.empty or not bajas_por_motivo.empty:
-        pdf.add_page()
-        pdf.draw_section_title("Detalle de Novedades")
-        if not df_altas.empty: pdf.draw_table("Detalle de Altas", df_altas[['Nº pers.', 'Apellido', 'Nombre de pila', 'Fecha nac.', 'Fecha', 'Línea', 'Categoría']])
-        if not df_bajas.empty: pdf.draw_table("Detalle de Bajas", df_bajas[['Nº pers.', 'Apellido', 'Nombre de pila', 'Motivo de la medida', 'Fecha nac.', 'Antigüedad', 'Desde', 'Línea', 'Categoría']])
-        if not bajas_por_motivo.empty: pdf.draw_table("Bajas por Motivo", bajas_por_motivo)
+    # CORRECCIÓN: Se eliminó el add_page() y el título genérico de aquí
+    if not df_altas.empty: pdf.draw_table("Detalle de Altas", df_altas[['Nº pers.', 'Apellido', 'Nombre de pila', 'Fecha nac.', 'Fecha', 'Línea', 'Categoría']])
+    if not df_bajas.empty: pdf.draw_table("Detalle de Bajas", df_bajas[['Nº pers.', 'Apellido', 'Nombre de pila', 'Motivo de la medida', 'Fecha nac.', 'Antigüedad', 'Desde', 'Línea', 'Categoría']])
+    if not bajas_por_motivo.empty: pdf.draw_table("Bajas por Motivo", bajas_por_motivo)
 
     return bytes(pdf.output())
     
