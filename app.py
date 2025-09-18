@@ -157,8 +157,6 @@ def crear_pdf_reporte(titulo_reporte, rango_fechas_str, df_altas, df_bajas, baja
     pdf.draw_table(f"Composición de la Dotación Activa (Al {fecha_final})", resumen_activos, is_crosstab=True)
 
     if not df_altas.empty or not df_bajas.empty or not bajas_por_motivo.empty or (df_desaparecidos is not None and not df_desaparecidos.empty):
-        pdf.add_page()
-        pdf.draw_section_title("Detalle de Novedades")
         if not df_altas.empty: pdf.draw_table("Detalle de Altas", df_altas[['Nº pers.', 'Apellido', 'Nombre de pila', 'Fecha nac.', 'Fecha', 'Línea', 'Categoría']])
         if not df_bajas.empty: pdf.draw_table("Detalle de Bajas", df_bajas[['Nº pers.', 'Apellido', 'Nombre de pila', 'Motivo de la medida', 'Fecha nac.', 'Antigüedad', 'Desde', 'Línea', 'Categoría']])
         if not bajas_por_motivo.empty: pdf.draw_table("Bajas por Motivo", bajas_por_motivo)
@@ -186,14 +184,16 @@ def formatear_y_procesar_novedades(df_altas_raw, df_bajas_raw):
         df_bajas['Fecha nac.'] = df_bajas['Fecha nac.'].dt.strftime('%d/%m/%Y')
         df_bajas['Desde'] = df_bajas['Desde'].dt.strftime('%d/%m/%Y')
     else:
-        df_bajas = pd.DataFrame()
+        # CORRECCIÓN: Crear DataFrame vacío CON columnas
+        df_bajas = pd.DataFrame(columns=['Nº pers.', 'Apellido', 'Nombre de pila', 'Motivo de la medida', 'Fecha nac.', 'Antigüedad', 'Desde', 'Línea', 'Categoría'])
     
     df_altas = df_altas_raw.copy()
     if not df_altas.empty:
         df_altas['Fecha'] = df_altas['Fecha'].dt.strftime('%d/%m/%Y')
         df_altas['Fecha nac.'] = df_altas['Fecha nac.'].dt.strftime('%d/%m/%Y')
     else:
-        df_altas = pd.DataFrame()
+        # CORRECCIÓN: Crear DataFrame vacío CON columnas
+        df_altas = pd.DataFrame(columns=['Nº pers.', 'Apellido', 'Nombre de pila', 'Fecha nac.', 'Fecha', 'Línea', 'Categoría'])
     return df_altas, df_bajas
 
 def filtrar_novedades_por_fecha(df_base_para_filtrar, fecha_inicio, fecha_fin):
@@ -242,7 +242,6 @@ with tab1:
         try:
             st.session_state.uploaded_file_general = uploaded_file_general
             df_base_general = procesar_archivo_base(uploaded_file_general, sheet_name='BaseQuery')
-            # CORRECCIÓN: Leer solo la columna de legajos del archivo de activos
             df_activos_general_raw = pd.read_excel(uploaded_file_general, sheet_name='Activos', usecols=['Nº pers.'])
             st.session_state.df_base_general = df_base_general
             st.session_state.df_activos_general_raw = df_activos_general_raw
@@ -255,7 +254,6 @@ with tab1:
             df_altas_general_raw = df_base_general[~df_base_general['Nº pers.'].isin(activos_legajos_viejos) & (df_base_general['Status ocupación'] == 'Activo')].copy()
             
             legajos_desaparecidos = activos_legajos_viejos - todos_legajos_nuevos
-            # CORRECCIÓN: Crear el DataFrame solo con los legajos
             df_desaparecidos = pd.DataFrame(legajos_desaparecidos, columns=['Nº pers.'])
             
             if not df_bajas_general_raw.empty: df_bajas_general_raw['Desde'] = df_bajas_general_raw['Desde'] - pd.Timedelta(days=1)
@@ -276,8 +274,8 @@ with tab1:
             st.download_button(label="📄 Descargar Reporte General (PDF)", data=pdf_bytes_general, file_name=f"Reporte_General_Dotacion_{datetime.now().strftime('%Y%m%d')}.pdf", mime="application/pdf")
             st.markdown("---")
 
-            st.subheader(f"Altas ({len(df_altas_general)})"); st.dataframe(df_altas_general[['Nº pers.', 'Apellido', 'Nombre de pila', 'Fecha nac.', 'Fecha', 'Línea', 'Categoría']], hide_index=True)
-            st.subheader(f"Bajas ({len(df_bajas_general)})"); st.dataframe(df_bajas_general[['Nº pers.', 'Apellido', 'Nombre de pila', 'Motivo de la medida', 'Fecha nac.', 'Antigüedad', 'Desde', 'Línea', 'Categoría']], hide_index=True)
+            st.subheader(f"Altas ({len(df_altas_general)})"); st.dataframe(df_altas_general, hide_index=True)
+            st.subheader(f"Bajas ({len(df_bajas_general)})"); st.dataframe(df_bajas_general, hide_index=True)
             
             if not df_desaparecidos.empty:
                 st.subheader(f"Cambios Organizacionales (Legajos no encontrados): {len(df_desaparecidos)}")
@@ -291,7 +289,6 @@ with tab1:
 with tab2:
     st.header("Dashboard de Resúmenes (General)")
     if 'df_base_general' in st.session_state:
-        # ... (código existente)
         df_base_general = st.session_state.df_base_general
         df_activos_general_raw = st.session_state.df_activos_general_raw
         df_altas_general = st.session_state.df_altas_general
