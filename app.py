@@ -6,8 +6,8 @@ import io
 
 # --- DEFINICIÓN DE LA PALETA DE COLORES ---
 COLOR_AZUL_INSTITUCIONAL = (4, 118, 208)
-COLOR_FONDO_CABECERA_TABLA = (70, 130, 180) # Un azul más oscuro para contraste
-COLOR_GRIS_FONDO = (240, 242, 246)
+COLOR_FONDO_CABECERA_TABLA = (70, 130, 180)
+COLOR_GRIS_FONDO_FILA = (240, 242, 246)
 COLOR_GRIS_LINEA = (220, 220, 220)
 COLOR_TEXTO_TITULO = (0, 51, 102)
 COLOR_TEXTO_CUERPO = (50, 50, 50)
@@ -42,24 +42,25 @@ class PDF(FPDF):
         self.ln(5)
 
     def draw_kpi_box(self, title, value, color, x, y):
-        kpi_width = 80 # Reducido
-        kpi_height = 20 # Reducido
+        kpi_width = 80
+        kpi_height = 16 # Reducido
         self.set_xy(x, y)
         
         self.set_fill_color(*color)
-        self.cell(kpi_width, 2, "", fill=True, ln=False, border=0)
+        self.cell(kpi_width, 1.5, "", fill=True, ln=False, border=0)
         
-        self.set_xy(x, y + 2)
-        self.set_fill_color(*COLOR_GRIS_FONDO)
-        self.cell(kpi_width, kpi_height - 2, "", border=1, fill=True)
+        self.set_xy(x, y + 1.5)
+        self.set_fill_color(255, 255, 255) # Sin fondo gris
+        self.set_draw_color(*COLOR_GRIS_LINEA)
+        self.cell(kpi_width, kpi_height - 1.5, "", border=1, fill=True)
         
-        self.set_xy(x, y + 5)
-        self.set_font('Arial', '', 11)
+        self.set_xy(x, y + 3)
+        self.set_font('Arial', '', 10) # Letra reducida
         self.set_text_color(*COLOR_TEXTO_CUERPO)
         self.cell(kpi_width, 8, title, align='C')
         
-        self.set_xy(x, y + 12)
-        self.set_font('Arial', 'B', 20)
+        self.set_xy(x, y + 8)
+        self.set_font('Arial', 'B', 16) # Letra reducida
         self.set_text_color(*COLOR_TEXTO_TITULO)
         self.cell(kpi_width, 10, str(value), align='C')
 
@@ -115,7 +116,7 @@ class PDF(FPDF):
             else:
                 self.set_font("Arial", "", 9)
             
-            self.set_fill_color(*COLOR_GRIS_FONDO)
+            self.set_fill_color(*COLOR_GRIS_FONDO_FILA)
             
             for col in df_formatted.columns:
                 self.cell(widths[col], 8, str(row[col]), 'T', 0, "C", fill)
@@ -131,22 +132,22 @@ def crear_pdf_reporte(titulo_reporte, rango_fechas_str, df_altas, df_bajas, baja
     pdf.draw_section_title(f"Indicadores del Período: {rango_fechas_str}")
     total_activos_val = f"{resumen_activos.loc['Total', 'Total']:,}".replace(',', '.') if not resumen_activos.empty else "0"
     
-    # Coordenadas calculadas para alinear
     x1 = pdf.l_margin
-    x2 = x1 + 80 + 10 # 80 de ancho + 10 de espacio
+    x2 = x1 + 80 + 10
     x3 = x2 + 80 + 10
     y = pdf.get_y()
 
     pdf.draw_kpi_box("Dotación Activa Total", total_activos_val, (200, 200, 200), x1, y)
     pdf.draw_kpi_box("Altas del Período", str(len(df_altas)), (200, 200, 200), x2, y)
     pdf.draw_kpi_box("Bajas del Período", str(len(df_bajas)), (200, 200, 200), x3, y)
-    pdf.ln(25)
+    pdf.ln(22)
     
     fecha_final = rango_fechas_str.split(' - ')[-1]
     pdf.draw_table("Resumen de Bajas", resumen_bajas, is_crosstab=True)
     pdf.draw_table("Resumen de Altas", resumen_altas, is_crosstab=True)
     pdf.draw_table(f"Composición de la Dotación Activa (Al {fecha_final})", resumen_activos, is_crosstab=True)
 
+    # La página de detalles ahora es la segunda página real de contenido.
     pdf.add_page()
     pdf.draw_section_title("Detalle de Novedades")
     if not df_altas.empty: pdf.draw_table("Detalle de Altas", df_altas[['Nº pers.', 'Apellido', 'Nombre de pila', 'Fecha nac.', 'Fecha', 'Línea', 'Categoría']])
@@ -154,9 +155,10 @@ def crear_pdf_reporte(titulo_reporte, rango_fechas_str, df_altas, df_bajas, baja
     if not bajas_por_motivo.empty: pdf.draw_table("Bajas por Motivo", bajas_por_motivo)
 
     return bytes(pdf.output())
+    
+# --- EL RESTO DEL CÓDIGO PERMANECE IGUAL ---
 
 def procesar_archivo_base(archivo_cargado, sheet_name='BaseQuery'):
-    # ... (El resto de las funciones auxiliares no cambian) ...
     df_base = pd.read_excel(archivo_cargado, sheet_name=sheet_name, engine='openpyxl')
     df_base.rename(columns={'Gr.prof.': 'Categoría', 'División de personal': 'Línea'}, inplace=True)
     for col in ['Fecha', 'Desde', 'Fecha nac.']:
@@ -169,7 +171,6 @@ def procesar_archivo_base(archivo_cargado, sheet_name='BaseQuery'):
     return df_base
 
 def formatear_y_procesar_novedades(df_altas_raw, df_bajas_raw):
-    # ... (Esta función no cambia) ...
     df_bajas = df_bajas_raw.copy()
     if not df_bajas.empty:
         df_bajas['Antigüedad'] = ((datetime.now() - df_bajas['Fecha']) / pd.Timedelta(days=365.25)).fillna(0).astype(int)
@@ -187,7 +188,6 @@ def formatear_y_procesar_novedades(df_altas_raw, df_bajas_raw):
     return df_altas, df_bajas
 
 def filtrar_novedades_por_fecha(df_base_para_filtrar, fecha_inicio, fecha_fin):
-    # ... (Esta función no cambia) ...
     df = df_base_para_filtrar.copy()
     altas_filtradas = df[(df['Fecha'] >= fecha_inicio) & (df['Fecha'] <= fecha_fin)].copy()
     df_bajas_potenciales = df[df['Status ocupación'] == 'Dado de baja'].copy()
@@ -201,7 +201,6 @@ def filtrar_novedades_por_fecha(df_base_para_filtrar, fecha_inicio, fecha_fin):
     return altas_filtradas, bajas_filtradas
 
 def calcular_activos_a_fecha(df_base, fecha_fin):
-    # ... (Esta función no cambia) ...
     df = df_base.copy()
     df = df[df['Fecha'] <= fecha_fin]
     
@@ -219,7 +218,6 @@ def calcular_activos_a_fecha(df_base, fecha_fin):
     return activos_en_fecha
 
 # --- INTERFAZ DE LA APP ---
-# El resto de la interfaz no necesita cambios
 st.set_page_config(page_title="Dashboard de Dotación", layout="wide")
 st.markdown("""<style>.main .block-container { padding-top: 2rem; padding-bottom: 2rem; background-color: #f0f2f6; } h1, h2, h3 { color: #003366; } div.stDownloadButton > button { background-color: #28a745; color: white; border-radius: 5px; font-weight: bold; }</style>""", unsafe_allow_html=True)
 st.title("📊 Dashboard de Control de Dotación")
