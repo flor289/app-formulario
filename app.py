@@ -234,7 +234,6 @@ with tab1:
                 fecha_inicio = col1.date_input("Fecha de Inicio del Período", value=None, key="fecha_inicio")
                 fecha_fin = col2.date_input("Fecha de Fin del Período", value=None, key="fecha_fin")
             
-            # Condición para continuar: Si es Diario, o si es Semanal/Mensual Y las fechas están puestas.
             proceder = False
             if tipo_reporte_sel == "Diario":
                 rango_fechas_str = datetime.now().strftime('%d/%m/%Y')
@@ -254,9 +253,13 @@ with tab1:
 
             if proceder:
                 activos_legajos_viejos = set(df_activos_raw['Nº pers.'])
+                
+                # --- LÓGICA CORREGIDA PARA ALTAS Y BAJAS (Opción A) ---
+                df_altas_raw = df_base[~df_base['Nº pers.'].isin(activos_legajos_viejos)].copy()
+                df_bajas_raw = df_base[df_base['Status ocupación'] == 'Dado de baja'].copy()
+                
+                # --- Lógica para Cambios Organizacionales (sigue igual) ---
                 todos_legajos_nuevos = set(df_base['Nº pers.'])
-                df_bajas_raw = df_base[df_base['Nº pers.'].isin(activos_legajos_viejos) & (df_base['Status ocupación'] == 'Dado de baja')].copy()
-                df_altas_raw = df_base[~df_base['Nº pers.'].isin(activos_legajos_viejos) & (df_base['Status ocupación'] == 'Activo')].copy()
                 legajos_desaparecidos = activos_legajos_viejos - todos_legajos_nuevos
                 df_desaparecidos_raw = pd.DataFrame(legajos_desaparecidos, columns=['Nº pers.'])
                 
@@ -299,9 +302,10 @@ with tab2:
         df_bajas = st.session_state.df_bajas
         df_desaparecidos = st.session_state.df_desaparecidos
         
+        # Recalcular 'raw' DFs para los resúmenes con la lógica correcta
         activos_legajos = set(df_activos_raw['Nº pers.'])
-        df_bajas_raw = df_base[df_base['Nº pers.'].isin(activos_legajos) & (df_base['Status ocupación'] == 'Dado de baja')].copy()
-        df_altas_raw = df_base[~df_base['Nº pers.'].isin(activos_legajos) & (df_base['Status ocupación'] == 'Activo')].copy()
+        df_altas_raw = df_base[~df_base['Nº pers.'].isin(activos_legajos)].copy()
+        df_bajas_raw = df_base[df_base['Status ocupación'] == 'Dado de baja'].copy()
 
         resumen_activos = pd.crosstab(df_base[df_base['Status ocupación'] == 'Activo']['Categoría'], df_base[df_base['Status ocupación'] == 'Activo']['Línea'], margins=True, margins_name="Total")
         resumen_bajas = pd.crosstab(df_bajas_raw['Categoría'], df_bajas_raw['Línea'], margins=True, margins_name="Total")
