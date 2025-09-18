@@ -43,24 +43,24 @@ class PDF(FPDF):
 
     def draw_kpi_box(self, title, value, color, x, y):
         kpi_width = 80
-        kpi_height = 16 # Reducido
+        kpi_height = 16
         self.set_xy(x, y)
         
         self.set_fill_color(*color)
         self.cell(kpi_width, 1.5, "", fill=True, ln=False, border=0)
         
         self.set_xy(x, y + 1.5)
-        self.set_fill_color(255, 255, 255) # Sin fondo gris
+        self.set_fill_color(255, 255, 255)
         self.set_draw_color(*COLOR_GRIS_LINEA)
         self.cell(kpi_width, kpi_height - 1.5, "", border=1, fill=True)
         
         self.set_xy(x, y + 3)
-        self.set_font('Arial', '', 10) # Letra reducida
+        self.set_font('Arial', '', 10)
         self.set_text_color(*COLOR_TEXTO_CUERPO)
         self.cell(kpi_width, 8, title, align='C')
         
         self.set_xy(x, y + 8)
-        self.set_font('Arial', 'B', 16) # Letra reducida
+        self.set_font('Arial', 'B', 16)
         self.set_text_color(*COLOR_TEXTO_TITULO)
         self.cell(kpi_width, 10, str(value), align='C')
 
@@ -137,28 +137,29 @@ def crear_pdf_reporte(titulo_reporte, rango_fechas_str, df_altas, df_bajas, baja
     x3 = x2 + 80 + 10
     y = pdf.get_y()
 
-    pdf.draw_kpi_box("Dotación Activa Total", total_activos_val, (200, 200, 200), x1, y)
+    pdf.draw_kpi_box("Dotación Activa", total_activos_val, (200, 200, 200), x1, y)
     pdf.draw_kpi_box("Altas del Período", str(len(df_altas)), (200, 200, 200), x2, y)
     pdf.draw_kpi_box("Bajas del Período", str(len(df_bajas)), (200, 200, 200), x3, y)
     pdf.ln(22)
     
     fecha_final = rango_fechas_str.split(' - ')[-1]
-    pdf.draw_table("Resumen de Bajas", resumen_bajas, is_crosstab=True)
-    pdf.draw_table("Resumen de Altas", resumen_altas, is_crosstab=True)
+    # --- CORRECCIÓN AQUÍ ---
+    pdf.draw_table(f"Resumen de Bajas (Período: {rango_fechas_str})", resumen_bajas, is_crosstab=True)
+    pdf.draw_table(f"Resumen de Altas (Período: {rango_fechas_str})", resumen_altas, is_crosstab=True)
     pdf.draw_table(f"Composición de la Dotación Activa (Al {fecha_final})", resumen_activos, is_crosstab=True)
 
-    # La página de detalles ahora es la segunda página real de contenido.
-    pdf.add_page()
-    pdf.draw_section_title("Detalle de Novedades")
-    if not df_altas.empty: pdf.draw_table("Detalle de Altas", df_altas[['Nº pers.', 'Apellido', 'Nombre de pila', 'Fecha nac.', 'Fecha', 'Línea', 'Categoría']])
-    if not df_bajas.empty: pdf.draw_table("Detalle de Bajas", df_bajas[['Nº pers.', 'Apellido', 'Nombre de pila', 'Motivo de la medida', 'Fecha nac.', 'Antigüedad', 'Desde', 'Línea', 'Categoría']])
-    if not bajas_por_motivo.empty: pdf.draw_table("Bajas por Motivo", bajas_por_motivo)
+    # El detalle de novedades ahora comienza aquí
+    if not df_altas.empty or not df_bajas.empty or not bajas_por_motivo.empty:
+        pdf.add_page()
+        pdf.draw_section_title("Detalle de Novedades")
+        if not df_altas.empty: pdf.draw_table("Detalle de Altas", df_altas[['Nº pers.', 'Apellido', 'Nombre de pila', 'Fecha nac.', 'Fecha', 'Línea', 'Categoría']])
+        if not df_bajas.empty: pdf.draw_table("Detalle de Bajas", df_bajas[['Nº pers.', 'Apellido', 'Nombre de pila', 'Motivo de la medida', 'Fecha nac.', 'Antigüedad', 'Desde', 'Línea', 'Categoría']])
+        if not bajas_por_motivo.empty: pdf.draw_table("Bajas por Motivo", bajas_por_motivo)
 
     return bytes(pdf.output())
     
-# --- EL RESTO DEL CÓDIGO PERMANECE IGUAL ---
-
 def procesar_archivo_base(archivo_cargado, sheet_name='BaseQuery'):
+    # ... (El resto de las funciones auxiliares no cambian) ...
     df_base = pd.read_excel(archivo_cargado, sheet_name=sheet_name, engine='openpyxl')
     df_base.rename(columns={'Gr.prof.': 'Categoría', 'División de personal': 'Línea'}, inplace=True)
     for col in ['Fecha', 'Desde', 'Fecha nac.']:
@@ -171,6 +172,7 @@ def procesar_archivo_base(archivo_cargado, sheet_name='BaseQuery'):
     return df_base
 
 def formatear_y_procesar_novedades(df_altas_raw, df_bajas_raw):
+    # ... (Esta función no cambia) ...
     df_bajas = df_bajas_raw.copy()
     if not df_bajas.empty:
         df_bajas['Antigüedad'] = ((datetime.now() - df_bajas['Fecha']) / pd.Timedelta(days=365.25)).fillna(0).astype(int)
@@ -188,6 +190,7 @@ def formatear_y_procesar_novedades(df_altas_raw, df_bajas_raw):
     return df_altas, df_bajas
 
 def filtrar_novedades_por_fecha(df_base_para_filtrar, fecha_inicio, fecha_fin):
+    # ... (Esta función no cambia) ...
     df = df_base_para_filtrar.copy()
     altas_filtradas = df[(df['Fecha'] >= fecha_inicio) & (df['Fecha'] <= fecha_fin)].copy()
     df_bajas_potenciales = df[df['Status ocupación'] == 'Dado de baja'].copy()
@@ -201,6 +204,7 @@ def filtrar_novedades_por_fecha(df_base_para_filtrar, fecha_inicio, fecha_fin):
     return altas_filtradas, bajas_filtradas
 
 def calcular_activos_a_fecha(df_base, fecha_fin):
+    # ... (Esta función no cambia) ...
     df = df_base.copy()
     df = df[df['Fecha'] <= fecha_fin]
     
@@ -284,7 +288,7 @@ with tab2:
 
         st.subheader("Indicadores Principales")
         col1, col2, col3 = st.columns(3)
-        col1.metric("Dotación Activa Total", f"{resumen_activos_full.loc['Total', 'Total']:,}".replace(',', '.'))
+        col1.metric("Dotación Activa", f"{resumen_activos_full.loc['Total', 'Total']:,}".replace(',', '.'))
         col2.metric("Altas del Período", len(df_altas_general))
         col3.metric("Bajas del Período", len(df_bajas_general))
         st.markdown("---")
