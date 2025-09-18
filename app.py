@@ -221,13 +221,9 @@ with tab1:
             st.markdown("---")
             st.subheader("Configuración de Títulos para el Reporte PDF")
             
-            tipo_reporte_sel = st.selectbox(
-                "Selecciona el tipo de período para el título:",
-                ("Diario", "Semanal", "Mensual")
-            )
+            tipo_reporte_sel = st.selectbox("Selecciona el tipo de período para el título:", ("Diario", "Semanal", "Mensual"))
             
-            fecha_inicio = None
-            fecha_fin = None
+            fecha_inicio = None; fecha_fin = None
             
             if tipo_reporte_sel != "Diario":
                 col1, col2 = st.columns(2)
@@ -236,14 +232,11 @@ with tab1:
             
             proceder = False
             if tipo_reporte_sel == "Diario":
-                rango_fechas_str = datetime.now().strftime('%d/%m/%Y')
-                nombre_archivo_fecha = datetime.now().strftime('%Y%m%d')
-                titulo_reporte = "Resumen Diario de Dotación"
+                rango_fechas_str = datetime.now().strftime('%d/%m/%Y'); nombre_archivo_fecha = datetime.now().strftime('%Y%m%d'); titulo_reporte = "Resumen Diario de Dotación"
                 proceder = True
             elif fecha_inicio and fecha_fin:
                 if fecha_inicio > fecha_fin:
-                    st.error("La fecha de inicio no puede ser posterior a la fecha de fin.")
-                    st.stop()
+                    st.error("La fecha de inicio no puede ser posterior a la fecha de fin."); st.stop()
                 rango_fechas_str = f"{fecha_inicio.strftime('%d/%m/%Y')} - {fecha_fin.strftime('%d/%m/%Y')}"
                 nombre_archivo_fecha = f"{tipo_reporte_sel}_{fecha_inicio.strftime('%Y%m%d')}"
                 titulo_reporte = f"Resumen {tipo_reporte_sel} de Dotación"
@@ -253,12 +246,9 @@ with tab1:
 
             if proceder:
                 activos_legajos_viejos = set(df_activos_raw['Nº pers.'])
+                df_bajas_raw = df_base[df_base['Nº pers.'].isin(activos_legajos_viejos) & (df_base['Status ocupación'] == 'Dado de baja')].copy()
+                df_altas_raw = df_base[~df_base['Nº pers.'].isin(activos_legajos_viejos) & (df_base['Status ocupación'] == 'Activo')].copy()
                 
-                # --- LÓGICA CORREGIDA PARA ALTAS Y BAJAS (Opción A) ---
-                df_altas_raw = df_base[~df_base['Nº pers.'].isin(activos_legajos_viejos)].copy()
-                df_bajas_raw = df_base[df_base['Status ocupación'] == 'Dado de baja'].copy()
-                
-                # --- Lógica para Cambios Organizacionales (sigue igual) ---
                 todos_legajos_nuevos = set(df_base['Nº pers.'])
                 legajos_desaparecidos = activos_legajos_viejos - todos_legajos_nuevos
                 df_desaparecidos_raw = pd.DataFrame(legajos_desaparecidos, columns=['Nº pers.'])
@@ -267,9 +257,7 @@ with tab1:
                 
                 df_altas, df_bajas, df_desaparecidos = formatear_y_procesar_novedades(df_altas_raw, df_bajas_raw, df_desaparecidos_raw)
                 
-                st.session_state.df_altas = df_altas
-                st.session_state.df_bajas = df_bajas
-                st.session_state.df_desaparecidos = df_desaparecidos
+                st.session_state.df_altas = df_altas; st.session_state.df_bajas = df_bajas; st.session_state.df_desaparecidos = df_desaparecidos
                 
                 resumen_activos = pd.crosstab(df_base[df_base['Status ocupación'] == 'Activo']['Categoría'], df_base[df_base['Status ocupación'] == 'Activo']['Línea'], margins=True, margins_name="Total")
                 resumen_bajas = pd.crosstab(df_bajas_raw['Categoría'], df_bajas_raw['Línea'], margins=True, margins_name="Total")
@@ -302,10 +290,10 @@ with tab2:
         df_bajas = st.session_state.df_bajas
         df_desaparecidos = st.session_state.df_desaparecidos
         
-        # Recalcular 'raw' DFs para los resúmenes con la lógica correcta
+        # --- CORRECCIÓN: USAR LA LÓGICA CORRECTA Y CONSISTENTE CON LA PESTAÑA 1 ---
         activos_legajos = set(df_activos_raw['Nº pers.'])
-        df_altas_raw = df_base[~df_base['Nº pers.'].isin(activos_legajos)].copy()
-        df_bajas_raw = df_base[df_base['Status ocupación'] == 'Dado de baja'].copy()
+        df_bajas_raw = df_base[df_base['Nº pers.'].isin(activos_legajos) & (df_base['Status ocupación'] == 'Dado de baja')].copy()
+        df_altas_raw = df_base[~df_base['Nº pers.'].isin(activos_legajos) & (df_base['Status ocupación'] == 'Activo')].copy()
 
         resumen_activos = pd.crosstab(df_base[df_base['Status ocupación'] == 'Activo']['Categoría'], df_base[df_base['Status ocupación'] == 'Activo']['Línea'], margins=True, margins_name="Total")
         resumen_bajas = pd.crosstab(df_bajas_raw['Categoría'], df_bajas_raw['Línea'], margins=True, margins_name="Total")
