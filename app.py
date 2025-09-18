@@ -202,11 +202,11 @@ st.set_page_config(page_title="Dashboard de Dotación", layout="wide")
 st.markdown("""<style>.main .block-container { padding-top: 2rem; padding-bottom: 2rem; background-color: #f0f2f6; } h1, h2, h3 { color: #003366; } div.stDownloadButton > button { background-color: #28a745; color: white; border-radius: 5px; font-weight: bold; }</style>""", unsafe_allow_html=True)
 st.title("📊 Dashboard de Control de Dotación")
 
-tab1, tab2 = st.tabs(["▶️ Reporte General y por Período", "📈 Resúmenes Detallados"])
+tab1, tab2 = st.tabs(["▶️ Reporte y Novedades", "📈 Resúmenes Detallados"])
 
 with tab1:
-    st.header("Análisis de Novedades por Comparación")
-    st.info("Sube tu archivo Excel con las pestañas 'BaseQuery' y 'Activos' para analizar las novedades entre dos momentos.")
+    st.header("Análisis por Comparación de Archivos")
+    st.info("Sube tu archivo Excel con las pestañas 'BaseQuery' (estado final) y 'Activos' (estado inicial) para analizar las novedades del período.")
     uploaded_file = st.file_uploader("Sube tu archivo Excel aquí", type=['xlsx'], key="main_uploader")
 
     if uploaded_file:
@@ -222,8 +222,8 @@ with tab1:
             st.subheader("Opcional: Define un Período para los Títulos del PDF")
             st.write("Si dejas los campos vacíos, se usará la fecha de hoy.")
             col1, col2 = st.columns(2)
-            fecha_inicio = col1.date_input("Fecha de Inicio del Período", value=None)
-            fecha_fin = col2.date_input("Fecha de Fin del Período", value=None)
+            fecha_inicio = col1.date_input("Fecha de Inicio del Período", value=None, key="fecha_inicio")
+            fecha_fin = col2.date_input("Fecha de Fin del Período", value=None, key="fecha_fin")
 
             if fecha_inicio and fecha_fin:
                 if fecha_inicio > fecha_fin:
@@ -237,7 +237,6 @@ with tab1:
                 nombre_archivo_fecha = datetime.now().strftime('%Y%m%d')
                 titulo_reporte = "Resumen Diario de Dotación"
 
-            # --- Lógica de Comparación ---
             activos_legajos_viejos = set(df_activos_raw['Nº pers.'])
             todos_legajos_nuevos = set(df_base['Nº pers.'])
             df_bajas_raw = df_base[df_base['Nº pers.'].isin(activos_legajos_viejos) & (df_base['Status ocupación'] == 'Dado de baja')].copy()
