@@ -133,26 +133,18 @@ def crear_pdf_reporte(titulo_reporte, rango_fechas_str, df_altas, df_bajas, baja
     
     y = pdf.get_y()
 
-    # Lógica condicional para 3 o 4 KPIs
     if df_desaparecidos is not None and not df_desaparecidos.empty:
-        # Layout para 4 KPIs (más pequeños)
         kpi_width = 65
         spacing = (pdf.page_width - (kpi_width * 4)) / 3
-        x1 = pdf.l_margin
-        x2 = x1 + kpi_width + spacing
-        x3 = x2 + kpi_width + spacing
-        x4 = x3 + kpi_width + spacing
+        x1 = pdf.l_margin; x2 = x1 + kpi_width + spacing; x3 = x2 + kpi_width + spacing; x4 = x3 + kpi_width + spacing
         
         pdf.draw_kpi_box("Dotación Activa", total_activos_val, (200, 200, 200), x1, y, width=kpi_width)
         pdf.draw_kpi_box("Altas del Período", str(len(df_altas)), (200, 200, 200), x2, y, width=kpi_width)
         pdf.draw_kpi_box("Bajas del Período", str(len(df_bajas)), (200, 200, 200), x3, y, width=kpi_width)
-        pdf.draw_kpi_box("Cambio Organizacional", str(len(df_desaparecidos)), (255, 165, 0), x4, y, width=kpi_width) # Color naranja para destacar
+        pdf.draw_kpi_box("Cambio Organizacional", str(len(df_desaparecidos)), (255, 165, 0), x4, y, width=kpi_width)
     else:
-        # Layout para 3 KPIs (más grandes)
         kpi_width = 80
-        x1 = pdf.l_margin
-        x2 = x1 + kpi_width + 10
-        x3 = x2 + kpi_width + 10
+        x1 = pdf.l_margin; x2 = x1 + kpi_width + 10; x3 = x2 + kpi_width + 10
         pdf.draw_kpi_box("Dotación Activa", total_activos_val, (200, 200, 200), x1, y, width=kpi_width)
         pdf.draw_kpi_box("Altas del Período", str(len(df_altas)), (200, 200, 200), x2, y, width=kpi_width)
         pdf.draw_kpi_box("Bajas del Período", str(len(df_bajas)), (200, 200, 200), x3, y, width=kpi_width)
@@ -171,14 +163,11 @@ def crear_pdf_reporte(titulo_reporte, rango_fechas_str, df_altas, df_bajas, baja
         if not df_bajas.empty: pdf.draw_table("Detalle de Bajas", df_bajas[['Nº pers.', 'Apellido', 'Nombre de pila', 'Motivo de la medida', 'Fecha nac.', 'Antigüedad', 'Desde', 'Línea', 'Categoría']])
         if not bajas_por_motivo.empty: pdf.draw_table("Bajas por Motivo", bajas_por_motivo)
         if df_desaparecidos is not None and not df_desaparecidos.empty:
-            pdf.draw_table("Cambios Organizacionales (Legajos no encontrados)", df_desaparecidos[['Nº pers.', 'Apellido', 'Nombre de pila', 'Fecha nac.', 'Antigüedad', 'Línea', 'Categoría']])
+            pdf.draw_table("Cambios Organizacionales (Legajos no encontrados)", df_desaparecidos[['Nº pers.']])
 
     return bytes(pdf.output())
     
-# --- EL RESTO DEL CÓDIGO PERMANECE IGUAL ---
-
 def procesar_archivo_base(archivo_cargado, sheet_name='BaseQuery'):
-    # ...
     df_base = pd.read_excel(archivo_cargado, sheet_name=sheet_name, engine='openpyxl')
     df_base.rename(columns={'Gr.prof.': 'Categoría', 'División de personal': 'Línea'}, inplace=True)
     for col in ['Fecha', 'Desde', 'Fecha nac.']:
@@ -191,7 +180,6 @@ def procesar_archivo_base(archivo_cargado, sheet_name='BaseQuery'):
     return df_base
 
 def formatear_y_procesar_novedades(df_altas_raw, df_bajas_raw):
-    # ...
     df_bajas = df_bajas_raw.copy()
     if not df_bajas.empty:
         df_bajas['Antigüedad'] = ((datetime.now() - df_bajas['Fecha']) / pd.Timedelta(days=365.25)).fillna(0).astype(int)
@@ -209,7 +197,6 @@ def formatear_y_procesar_novedades(df_altas_raw, df_bajas_raw):
     return df_altas, df_bajas
 
 def filtrar_novedades_por_fecha(df_base_para_filtrar, fecha_inicio, fecha_fin):
-    # ...
     df = df_base_para_filtrar.copy()
     altas_filtradas = df[(df['Fecha'] >= fecha_inicio) & (df['Fecha'] <= fecha_fin)].copy()
     df_bajas_potenciales = df[df['Status ocupación'] == 'Dado de baja'].copy()
@@ -223,7 +210,6 @@ def filtrar_novedades_por_fecha(df_base_para_filtrar, fecha_inicio, fecha_fin):
     return altas_filtradas, bajas_filtradas
 
 def calcular_activos_a_fecha(df_base, fecha_fin):
-    # ...
     df = df_base.copy()
     df = df[df['Fecha'] <= fecha_fin]
     
@@ -256,22 +242,25 @@ with tab1:
         try:
             st.session_state.uploaded_file_general = uploaded_file_general
             df_base_general = procesar_archivo_base(uploaded_file_general, sheet_name='BaseQuery')
-            df_activos_general_raw = pd.read_excel(uploaded_file_general, sheet_name='Activos', engine='openpyxl')
+            # CORRECCIÓN: Leer solo la columna de legajos del archivo de activos
+            df_activos_general_raw = pd.read_excel(uploaded_file_general, sheet_name='Activos', usecols=['Nº pers.'])
             st.session_state.df_base_general = df_base_general
             st.session_state.df_activos_general_raw = df_activos_general_raw
             st.success("Archivo general cargado y procesado.")
 
             activos_legajos_viejos = set(df_activos_general_raw['Nº pers.'])
             todos_legajos_nuevos = set(df_base_general['Nº pers.'])
+            
             df_bajas_general_raw = df_base_general[df_base_general['Nº pers.'].isin(activos_legajos_viejos) & (df_base_general['Status ocupación'] == 'Dado de baja')].copy()
             df_altas_general_raw = df_base_general[~df_base_general['Nº pers.'].isin(activos_legajos_viejos) & (df_base_general['Status ocupación'] == 'Activo')].copy()
+            
             legajos_desaparecidos = activos_legajos_viejos - todos_legajos_nuevos
-            df_desaparecidos_raw = df_activos_general_raw[df_activos_general_raw['Nº pers.'].isin(legajos_desaparecidos)].copy()
+            # CORRECCIÓN: Crear el DataFrame solo con los legajos
+            df_desaparecidos = pd.DataFrame(legajos_desaparecidos, columns=['Nº pers.'])
             
             if not df_bajas_general_raw.empty: df_bajas_general_raw['Desde'] = df_bajas_general_raw['Desde'] - pd.Timedelta(days=1)
             
             df_altas_general, df_bajas_general = formatear_y_procesar_novedades(df_altas_general_raw, df_bajas_general_raw)
-            df_desaparecidos, _ = formatear_y_procesar_novedades(df_desaparecidos_raw, pd.DataFrame())
 
             st.session_state.df_altas_general = df_altas_general
             st.session_state.df_bajas_general = df_bajas_general
@@ -292,22 +281,22 @@ with tab1:
             
             if not df_desaparecidos.empty:
                 st.subheader(f"Cambios Organizacionales (Legajos no encontrados): {len(df_desaparecidos)}")
-                st.warning("Las siguientes personas estaban en la lista de activos anterior pero no se encontraron en el reporte actual (ni como activos ni como bajas).")
-                st.dataframe(df_desaparecidos[['Nº pers.', 'Apellido', 'Nombre de pila', 'Fecha nac.', 'Antigüedad', 'Línea', 'Categoría']], hide_index=True)
+                st.warning("Los siguientes legajos estaban en la lista de activos anterior pero no se encontraron en el reporte actual.")
+                st.dataframe(df_desaparecidos[['Nº pers.']], hide_index=True)
 
         except Exception as e:
             st.error(f"Ocurrió un error en el archivo general: {e}")
-            st.warning("Verifica que el archivo contenga las pestañas 'Activos' y 'BaseQuery' con todas las columnas necesarias.")
+            st.warning("Verifica que el archivo contenga las pestañas 'Activos' (con la columna 'Nº pers.') y 'BaseQuery'.")
 
 with tab2:
-    # ... (El código de la pestaña 2 no necesita cambios)
     st.header("Dashboard de Resúmenes (General)")
     if 'df_base_general' in st.session_state:
-        # ...
+        # ... (código existente)
         df_base_general = st.session_state.df_base_general
         df_activos_general_raw = st.session_state.df_activos_general_raw
         df_altas_general = st.session_state.df_altas_general
         df_bajas_general = st.session_state.df_bajas_general
+        df_desaparecidos = st.session_state.df_desaparecidos
         
         activos_legajos = set(df_activos_general_raw['Nº pers.'])
         df_bajas_general_raw = df_base_general[df_base_general['Nº pers.'].isin(activos_legajos) & (df_base_general['Status ocupación'] == 'Dado de baja')].copy()
@@ -320,10 +309,13 @@ with tab2:
         if not bajas_por_motivo_full.empty: bajas_por_motivo_full.loc['Total'] = bajas_por_motivo_full.sum()
 
         st.subheader("Indicadores Principales")
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Dotación Activa", f"{resumen_activos_full.loc['Total', 'Total']:,}".replace(',', '.'))
-        col2.metric("Altas del Período", len(df_altas_general))
-        col3.metric("Bajas del Período", len(df_bajas_general))
+        kpi_cols = st.columns(4 if not df_desaparecidos.empty else 3)
+        kpi_cols[0].metric("Dotación Activa", f"{resumen_activos_full.loc['Total', 'Total']:,}".replace(',', '.'))
+        kpi_cols[1].metric("Altas del Período", len(df_altas_general))
+        kpi_cols[2].metric("Bajas del Período", len(df_bajas_general))
+        if not df_desaparecidos.empty:
+            kpi_cols[3].metric("Cambio Organizacional", len(df_desaparecidos))
+
         st.markdown("---")
         
         formatter = lambda x: f'{x:,.0f}'.replace(',', '.') if isinstance(x, (int, float)) else x
@@ -337,7 +329,6 @@ with tab2:
         st.info("Sube un archivo en la pestaña 'Novedades (General)' para ver los resúmenes.")
 
 with tab3:
-    # ... (El código de la pestaña 3 no necesita cambios)
     st.header("Generador de Reportes Semanales (por fecha de evento)")
     uploader_sem = st.file_uploader("Sube un archivo (pestaña 'Sheet1') o usa el general", type=['xlsx'], key="upload_sem")
     archivo_para_sem = uploader_sem or st.session_state.get('uploaded_file_general')
@@ -372,7 +363,6 @@ with tab3:
         st.info("Sube un archivo en la pestaña 'Novedades (General)' o aquí mismo para generar un reporte.")
 
 with tab4:
-    # ... (El código de la pestaña 4 no necesita cambios)
     st.header("Generador de Reportes Mensuales (por fecha de evento)")
     uploader_men = st.file_uploader("Sube un archivo (pestaña 'Sheet1') o usa el general", type=['xlsx'], key="upload_men")
     archivo_para_men = uploader_men or st.session_state.get('uploaded_file_general')
