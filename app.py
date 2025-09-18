@@ -97,8 +97,10 @@ class PDF(FPDF):
         self.set_text_color(*COLOR_TEXTO_CUERPO)
         self.set_draw_color(*COLOR_GRIS_LINEA)
         self.set_line_width(0.2)
-
-        for i, row in df_formatted.iterrows():
+        
+        # --- CORRECCIÓN AQUÍ ---
+        # Usamos enumerate para tener un contador simple (0, 1, 2...) sin importar el índice original del DataFrame
+        for i, (_, row) in enumerate(df_formatted.iterrows()):
             if self.get_y() + 8 > self.h - self.b_margin:
                 self.add_page(orientation=self.cur_orientation)
                 self.set_font("Arial", "B", 9)
@@ -109,7 +111,7 @@ class PDF(FPDF):
                 self.ln()
                 self.set_text_color(*COLOR_TEXTO_CUERPO)
 
-            fill = i % 2 == 1
+            fill = i % 2 == 1 # Ahora 'i' siempre será 0, 1, 2, 3...
             if "Total" in str(row.iloc[0]):
                 self.set_font("Arial", "B", 9)
                 fill = False
@@ -147,10 +149,10 @@ def crear_pdf_reporte(titulo_reporte, rango_fechas_str, df_altas, df_bajas, baja
     pdf.draw_table(f"Resumen de Altas (Período: {rango_fechas_str})", resumen_altas, is_crosstab=True)
     pdf.draw_table(f"Composición de la Dotación Activa (Al {fecha_final})", resumen_activos, is_crosstab=True)
 
-    # CORRECCIÓN: Se eliminó el add_page() y el título genérico de aquí
-    if not df_altas.empty: pdf.draw_table("Detalle de Altas", df_altas[['Nº pers.', 'Apellido', 'Nombre de pila', 'Fecha nac.', 'Fecha', 'Línea', 'Categoría']])
-    if not df_bajas.empty: pdf.draw_table("Detalle de Bajas", df_bajas[['Nº pers.', 'Apellido', 'Nombre de pila', 'Motivo de la medida', 'Fecha nac.', 'Antigüedad', 'Desde', 'Línea', 'Categoría']])
-    if not bajas_por_motivo.empty: pdf.draw_table("Bajas por Motivo", bajas_por_motivo)
+    if not df_altas.empty or not df_bajas.empty or not bajas_por_motivo.empty:
+        if not df_altas.empty: pdf.draw_table("Detalle de Altas", df_altas[['Nº pers.', 'Apellido', 'Nombre de pila', 'Fecha nac.', 'Fecha', 'Línea', 'Categoría']])
+        if not df_bajas.empty: pdf.draw_table("Detalle de Bajas", df_bajas[['Nº pers.', 'Apellido', 'Nombre de pila', 'Motivo de la medida', 'Fecha nac.', 'Antigüedad', 'Desde', 'Línea', 'Categoría']])
+        if not bajas_por_motivo.empty: pdf.draw_table("Bajas por Motivo", bajas_por_motivo)
 
     return bytes(pdf.output())
     
