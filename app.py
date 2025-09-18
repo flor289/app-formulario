@@ -133,6 +133,7 @@ def crear_pdf_reporte(titulo_reporte, rango_fechas_str, df_altas, df_bajas, baja
     
     y = pdf.get_y()
 
+    # Lógica condicional para 3 o 4 KPIs
     if df_desaparecidos is not None and not df_desaparecidos.empty:
         kpi_width = 65; spacing = (pdf.page_width - (kpi_width * 4)) / 3
         x1 = pdf.l_margin; x2 = x1 + kpi_width + spacing; x3 = x2 + kpi_width + spacing; x4 = x3 + kpi_width + spacing
@@ -247,8 +248,14 @@ with tab1:
             if proceder:
                 activos_legajos_viejos = set(df_activos_raw['Nº pers.'])
                 
-                df_bajas_raw = df_base[df_base['Nº pers.'].isin(activos_legajos_viejos) & (df_base['Status ocupación'] == 'Dado de baja')].copy()
-                df_altas_raw = df_base[~df_base['Nº pers.'].isin(activos_legajos_viejos) & (df_base['Status ocupación'] == 'Activo')].copy()
+                # --- LÓGICA FINAL Y PRECISA PARA ALTAS, BAJAS Y CASOS ESPECIALES ---
+                # BAJAS: Empleados que estaban antes Y ahora están de baja, O que no estaban antes y ahora están de baja.
+                bajas_condicion_1 = df_base['Nº pers.'].isin(activos_legajos_viejos) & (df_base['Status ocupación'] == 'Dado de baja')
+                bajas_condicion_2 = ~df_base['Nº pers.'].isin(activos_legajos_viejos) & (df_base['Status ocupación'] == 'Dado de baja')
+                df_bajas_raw = df_base[bajas_condicion_1 | bajas_condicion_2].copy()
+                
+                # ALTAS: Empleados que no estaban antes (sin importar su estado final).
+                df_altas_raw = df_base[~df_base['Nº pers.'].isin(activos_legajos_viejos)].copy()
                 
                 todos_legajos_nuevos = set(df_base['Nº pers.'])
                 legajos_desaparecidos = activos_legajos_viejos - todos_legajos_nuevos
@@ -293,8 +300,10 @@ with tab2:
         
         # --- CORRECCIÓN: USAR LA LÓGICA CORRECTA Y CONSISTENTE CON LA PESTAÑA 1 ---
         activos_legajos = set(df_activos_raw['Nº pers.'])
-        df_bajas_raw = df_base[df_base['Nº pers.'].isin(activos_legajos) & (df_base['Status ocupación'] == 'Dado de baja')].copy()
-        df_altas_raw = df_base[~df_base['Nº pers.'].isin(activos_legajos) & (df_base['Status ocupación'] == 'Activo')].copy()
+        bajas_condicion_1 = df_base['Nº pers.'].isin(activos_legajos) & (df_base['Status ocupación'] == 'Dado de baja')
+        bajas_condicion_2 = ~df_base['Nº pers.'].isin(activos_legajos) & (df_base['Status ocupación'] == 'Dado de baja')
+        df_bajas_raw = df_base[bajas_condicion_1 | bajas_condicion_2].copy()
+        df_altas_raw = df_base[~df_base['Nº pers.'].isin(activos_legajos)].copy()
 
         resumen_activos = pd.crosstab(df_base[df_base['Status ocupación'] == 'Activo']['Categoría'], df_base[df_base['Status ocupación'] == 'Activo']['Línea'], margins=True, margins_name="Total")
         resumen_bajas = pd.crosstab(df_bajas_raw['Categoría'], df_bajas_raw['Línea'], margins=True, margins_name="Total")
