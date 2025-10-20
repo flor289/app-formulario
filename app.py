@@ -71,7 +71,13 @@ class PDF(FPDF):
         if is_crosstab: df = df.replace(0, '-')
         if df.index.name: df.reset_index(inplace=True)
 
-        if self.get_y() + (8 * (len(df) + 1) + 10) > self.h - self.b_margin: self.add_page(orientation=self.cur_orientation)
+        # Verificar si hay espacio suficiente antes de dibujar el título y la tabla
+        space_needed = 10 + 5 + 8 # Título + espacio + 1 fila de encabezado
+        if len(df) > 0:
+             space_needed += 8 # Al menos una fila de datos
+             
+        if self.get_y() + space_needed > self.h - self.b_margin: 
+             self.add_page(orientation=self.cur_orientation)
 
         self.draw_section_title(title)
 
@@ -133,7 +139,6 @@ def crear_pdf_reporte(titulo_reporte, rango_fechas_str, df_altas, df_bajas, baja
     
     y = pdf.get_y()
 
-    # Valores para los KPIs
     valor_altas = len(df_altas) if len(df_altas) > 0 else '-'
     valor_bajas = len(df_bajas) if len(df_bajas) > 0 else '-'
     
@@ -159,7 +164,10 @@ def crear_pdf_reporte(titulo_reporte, rango_fechas_str, df_altas, df_bajas, baja
     pdf.draw_table(f"Resumen de Altas (Período: {rango_fechas_str})", resumen_altas, is_crosstab=True)
     pdf.draw_table(f"Composición de la Dotación Activa (Al {fecha_final})", resumen_activos, is_crosstab=True)
 
+    # Solo añadir página para detalles si hay algo que mostrar
     if not df_altas.empty or not df_bajas.empty or not bajas_por_motivo.empty or (df_desaparecidos is not None and not df_desaparecidos.empty):
+        pdf.add_page() # Añadir página solo si hay detalles
+        pdf.draw_section_title("Detalle de Novedades")
         if not df_altas.empty: pdf.draw_table("Detalle de Altas", df_altas[['Nº pers.', 'Apellido', 'Nombre de pila', 'Fecha nac.', 'Fecha', 'Línea', 'Categoría']])
         if not df_bajas.empty: pdf.draw_table("Detalle de Bajas", df_bajas[['Nº pers.', 'Apellido', 'Nombre de pila', 'Motivo de la medida', 'Fecha nac.', 'Antigüedad', 'Desde', 'Línea', 'Categoría']])
         if not bajas_por_motivo.empty: pdf.draw_table("Bajas por Motivo", bajas_por_motivo)
@@ -183,7 +191,8 @@ def procesar_archivo_base(archivo_cargado):
 def formatear_y_procesar_novedades(df_altas_raw, df_bajas_raw, df_desaparecidos_raw=None):
     df_bajas = df_bajas_raw.copy()
     if not df_bajas.empty:
-        if 'Fecha' in df_bajas.columns and not pd.api.types.is_null_dtype(df_bajas['Fecha']):
+        # CORRECCIÓN: Usar isnull().all() en lugar de is_null_dtype
+        if 'Fecha' in df_bajas.columns and not df_bajas['Fecha'].isnull().all():
             df_bajas['Antigüedad'] = ((datetime.now() - df_bajas['Fecha']) / pd.Timedelta(days=365.25)).fillna(0).astype(int)
         else:
             df_bajas['Antigüedad'] = 0
@@ -201,7 +210,8 @@ def formatear_y_procesar_novedades(df_altas_raw, df_bajas_raw, df_desaparecidos_
     
     df_desaparecidos = df_desaparecidos_raw.copy() if df_desaparecidos_raw is not None else pd.DataFrame(columns=['Nº pers.'])
     if not df_desaparecidos.empty:
-        if 'Fecha' in df_desaparecidos.columns and not pd.api.types.is_null_dtype(df_desaparecidos['Fecha']):
+        # CORRECCIÓN: Usar isnull().all() en lugar de is_null_dtype
+        if 'Fecha' in df_desaparecidos.columns and not df_desaparecidos['Fecha'].isnull().all():
              df_desaparecidos['Antigüedad'] = ((datetime.now() - df_desaparecidos['Fecha']) / pd.Timedelta(days=365.25)).fillna(0).astype(int)
         else:
              df_desaparecidos['Antigüedad'] = 0
@@ -259,9 +269,13 @@ with tab1:
 
             if proceder:
                 activos_legajos_viejos = set(df_activos_raw['Nº pers.'])
-                df_bajas_raw = df_base[df_base['Nº pers.'].isin(activos_legajos_viejos) & (df_base['Status ocupación'] == 'Dado de baja')].copy()
-                df_altas_raw = df_base[~df_base['Nº pers.'].isin(activos_legajos_viejos) & (df_base['Status ocupación'] == 'Activo')].copy()
                 
+                # --- Lógica Final para Novedades Generales ---
+                df_altas_raw = df_base[~df_base['Nº pers.'].isin(activos_legajos_viejos) & (df_base['Status ocupación'] == 'Activo')].copy()
+                bajas_condicion_1 = df_base['Nº pers.'].isin(activos_legajos_viejos) & (df_base['Status ocupación'] == 'Dado de baja')
+                bajas_condicion_2 = ~df_base['Nº pers.'].isin(activos_legajos_viejos) & (df_base['Status ocupación'] == 'Dado de baja')
+                df_bajas_raw = df_base[bajas_condicion_1 | bajas_condicion_2].copy()
+
                 todos_legajos_nuevos = set(df_base['Nº pers.'])
                 legajos_desaparecidos = activos_legajos_viejos - todos_legajos_nuevos
                 df_desaparecidos_raw = pd.DataFrame(legajos_desaparecidos, columns=['Nº pers.'])
@@ -296,16 +310,25 @@ with tab1:
 
 with tab2:
     st.header("Dashboard de Resúmenes Detallados")
-    if 'df_base' in st.session_state:
+    # CORRECCIÓN: Asegurar que los datos existen en session_state antes de usarlos
+    if 'df_base' in st.session_state and \
+       'df_activos_raw' in st.session_state and \
+       'df_altas' in st.session_state and \
+       'df_bajas' in st.session_state and \
+       'df_desaparecidos' in st.session_state:
+        
         df_base = st.session_state.df_base
         df_activos_raw = st.session_state.df_activos_raw
         df_altas = st.session_state.df_altas
         df_bajas = st.session_state.df_bajas
         df_desaparecidos = st.session_state.df_desaparecidos
         
+        # --- Recalcular DFs Raw para resúmenes basados en la lógica correcta ---
         activos_legajos = set(df_activos_raw['Nº pers.'])
-        df_bajas_raw = df_base[df_base['Nº pers.'].isin(activos_legajos) & (df_base['Status ocupación'] == 'Dado de baja')].copy()
         df_altas_raw = df_base[~df_base['Nº pers.'].isin(activos_legajos) & (df_base['Status ocupación'] == 'Activo')].copy()
+        bajas_condicion_1 = df_base['Nº pers.'].isin(activos_legajos) & (df_base['Status ocupación'] == 'Dado de baja')
+        bajas_condicion_2 = ~df_base['Nº pers.'].isin(activos_legajos) & (df_base['Status ocupación'] == 'Dado de baja')
+        df_bajas_raw = df_base[bajas_condicion_1 | bajas_condicion_2].copy()
 
         resumen_activos = pd.crosstab(df_base[df_base['Status ocupación'] == 'Activo']['Categoría'], df_base[df_base['Status ocupación'] == 'Activo']['Línea'], margins=True, margins_name="Total")
         resumen_bajas = pd.crosstab(df_bajas_raw['Categoría'], df_bajas_raw['Línea'], margins=True, margins_name="Total")
