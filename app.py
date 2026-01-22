@@ -4,7 +4,7 @@ from fpdf import FPDF
 from datetime import datetime, timedelta
 import io
 
-# --- DEFINICIÓN DE LA PALETA DE COLORES ---
+# --- CONFIGURACIÓN Y ESTILOS ---
 COLOR_AZUL_INSTITUCIONAL = (4, 118, 208)
 COLOR_FONDO_CABECERA_TABLA = (70, 130, 180)
 COLOR_GRIS_FONDO_FILA = (240, 242, 246)
@@ -39,7 +39,7 @@ class PDF(FPDF):
         self.line(self.get_x(), self.get_y(), self.get_x() + self.page_width, self.get_y())
         self.ln(5)
 
-    def draw_kpi_box(self, title, value, color, x, y, width=80):
+    def draw_kpi_box(self, title, value, color, x, y, width=65):
         kpi_height = 16
         self.set_xy(x, y)
         self.set_fill_color(*color)
@@ -114,14 +114,16 @@ def crear_pdf_reporte(titulo_reporte, rango_fechas_str, df_altas, df_bajas, baja
     total_activos_val = f"{resumen_activos.loc['Total', 'Total']:,}".replace(',', '.') if not resumen_activos.empty else "0"
     y = pdf.get_y()
     
-    kpi_width = 65 if (df_desaparecidos is not None and not df_desaparecidos.empty) else 80
-    spacing = (pdf.page_width - (kpi_width * (4 if kpi_width == 65 else 3))) / 3
+    # KPIs dinámicos
+    has_co = df_desaparecidos is not None and not df_desaparecidos.empty
+    kpi_width = 65 if has_co else 80
+    spacing = (pdf.page_width - (kpi_width * (4 if has_co else 3))) / 3
     
     pdf.draw_kpi_box("Dotación Activa", total_activos_val, (200, 200, 200), pdf.l_margin, y, width=kpi_width)
     pdf.draw_kpi_box("Altas del Período", '-' if len(df_altas) == 0 else str(len(df_altas)), (200, 200, 200), pdf.l_margin + kpi_width + spacing, y, width=kpi_width)
     pdf.draw_kpi_box("Bajas del Período", '-' if len(df_bajas) == 0 else str(len(df_bajas)), (200, 200, 200), pdf.l_margin + (kpi_width + spacing)*2, y, width=kpi_width)
     
-    if kpi_width == 65:
+    if has_co:
         pdf.draw_kpi_box("Cambio Organizativo", str(len(df_desaparecidos)), (255, 165, 0), pdf.l_margin + (kpi_width + spacing)*3, y, width=kpi_width)
     
     pdf.ln(22)
@@ -134,7 +136,7 @@ def crear_pdf_reporte(titulo_reporte, rango_fechas_str, df_altas, df_bajas, baja
     if not df_bajas.empty: pdf.draw_table("Detalle de Bajas", df_bajas[['Nº pers.', 'Apellido', 'Nombre de pila', 'Motivo de la medida', 'Fecha nac.', 'Antigüedad', 'Desde', 'Línea', 'Categoría']])
     if not bajas_por_motivo.empty: pdf.draw_table("Bajas por Motivo", bajas_por_motivo)
     
-    if df_desaparecidos is not None and not df_desaparecidos.empty:
+    if has_co:
         cols_presentes = [c for c in ['Nº pers.', 'Apellido', 'Nombre de pila', 'Desde', 'Línea', 'Categoría'] if c in df_desaparecidos.columns]
         pdf.draw_table("Detalle Cambios Organizativos", df_desaparecidos[cols_presentes])
         
@@ -154,25 +156,21 @@ def procesar_archivo_base(archivo_cargado, sheet_name='BaseQuery'):
     except: return pd.DataFrame()
 
 def detectar_y_completar_co(legajos_desaparecidos, df_co_respaldo):
-    """Lógica para cruzar legajos desaparecidos con la pestaña C.O."""
+    """Cruza legajos desaparecidos con la pestaña CO."""
     df_desaparecidos = pd.DataFrame({'Nº pers.': list(legajos_desaparecidos)})
     
     if not df_co_respaldo.empty:
-        # Hacemos un merge para traer los datos de la pestaña C.O.
         df_desaparecidos = pd.merge(df_desaparecidos, df_co_respaldo, on='Nº pers.', how='left')
-        
-        # Identificamos quiénes NO tienen datos en la pestaña C.O.
         sin_datos = df_desaparecidos[df_desaparecidos['Apellido'].isna()]['Nº pers.'].tolist()
         if sin_datos:
-            st.warning(f"⚠️ **Aviso de App:** Los siguientes legajos son Cambios Organizativos pero **no tienen datos** en la pestaña 'C.O.': {sin_datos}")
+            st.warning(f"⚠️ **Aviso de App:** Se detectaron Cambios Organizativos pero **faltan datos en la pestaña 'CO'** para los legajos: {sin_datos}")
             
-        # Formatear fechas de C.O. (Sin restar días)
         for col in ['Desde', 'Fecha nac.']:
             if col in df_desaparecidos.columns:
                 df_desaparecidos[col] = df_desaparecidos[col].dt.strftime('%d/%m/%Y').fillna('-')
     else:
         if legajos_desaparecidos:
-            st.warning(f"⚠️ **Aviso de App:** Se detectaron C.O. ({list(legajos_desaparecidos)}) pero la pestaña 'C.O.' está vacía o no existe.")
+            st.warning(f"⚠️ **Aviso de App:** Hay Cambios Organizativos pero la pestaña 'CO' no fue encontrada.")
             
     return df_desaparecidos
 
@@ -200,28 +198,22 @@ with tabs[0]:
         try:
             df_base = procesar_archivo_base(uploaded_file, 'BaseQuery')
             df_activos_prev = pd.read_excel(uploaded_file, sheet_name='Activos')
-            df_co_respaldo = procesar_archivo_base(uploaded_file, 'C.O.')
+            df_co_respaldo = procesar_archivo_base(uploaded_file, 'CO') # Corregido a CO
             
-            # Detección física
             legajos_viejos = set(df_activos_prev['Nº pers.'])
-            legajos_nuevos = set(df_base['Nº pers.'])
-            desaparecidos = legajos_viejos - legajos_nuevos
+            desaparecidos = legajos_viejos - set(df_base['Nº pers.'])
             
-            # Altas y Bajas (Lógica SAP)
             df_altas_raw = df_base[~df_base['Nº pers.'].isin(legajos_viejos) & (df_base['Status ocupación'] == 'Activo')].copy()
             df_bajas_raw = df_base[df_base['Nº pers.'].isin(legajos_viejos) & (df_base['Status ocupación'] == 'Dado de baja')].copy()
             if not df_bajas_raw.empty: df_bajas_raw['Desde'] = df_bajas_raw['Desde'] - pd.Timedelta(days=1)
             
-            # C.O. con cruce de datos
             df_desaparecidos = detectar_y_completar_co(desaparecidos, df_co_respaldo)
             
-            # Formateo para visualización
             df_altas_vis = df_altas_raw.copy()
             if not df_altas_vis.empty:
                 df_altas_vis['Fecha'] = df_altas_vis['Fecha'].dt.strftime('%d/%m/%Y')
                 df_altas_vis['Fecha nac.'] = df_altas_vis['Fecha nac.'].dt.strftime('%d/%m/%Y')
             
-            # Reporte PDF
             resumen_activos = pd.crosstab(df_base[df_base['Status ocupación'] == 'Activo']['Categoría'], df_base[df_base['Status ocupación'] == 'Activo']['Línea'], margins=True, margins_name="Total")
             resumen_bajas = pd.crosstab(df_bajas_raw['Categoría'], df_bajas_raw['Línea'], margins=True, margins_name="Total")
             resumen_altas = pd.crosstab(df_altas_raw['Categoría'], df_altas_raw['Línea'], margins=True, margins_name="Total")
@@ -234,13 +226,11 @@ with tabs[0]:
             st.subheader(f"Altas ({len(df_altas_vis)})"); st.dataframe(df_altas_vis, hide_index=True)
             st.subheader(f"Detalle Cambios Organizativos ({len(desaparecidos)})"); st.dataframe(df_desaparecidos, hide_index=True)
             
-            # Guardar en session_state para las otras pestañas
             st.session_state.df_base = df_base
             st.session_state.df_activos_prev = df_activos_prev
             st.session_state.df_co_respaldo = df_co_respaldo
         except Exception as e: st.error(f"Error: {e}")
 
-# Funciones para reportes periódicos (Semanal, Mensual, Anual)
 def render_periodico(tipo):
     if 'df_base' not in st.session_state:
         st.info("Sube un archivo en 'Reporte Diario' primero.")
@@ -255,24 +245,22 @@ def render_periodico(tipo):
         df_co_respaldo = st.session_state.df_co_respaldo
         df_activos_prev = st.session_state.df_activos_prev
         
-        # Filtrar Altas y Bajas por fecha
         df_altas_raw, df_bajas_raw = filtrar_novedades_por_fecha(df_base, pd.to_datetime(inicio), pd.to_datetime(fin))
         
-        # Ajuste Anual ASP.AY.C
+        # Lógica Anual Normalización
         if tipo == "Anual" and not df_altas_raw.empty:
             df_altas_raw['Categoría'] = 'ASP.AY.C'
+            st.info(f"💡 Info de App: Se normalizaron las altas a 'ASP.AY.C' para este reporte anual.")
             
-        # C.O. (Sigue siendo físico)
         desaparecidos = set(df_activos_prev['Nº pers.']) - set(df_base['Nº pers.'])
         df_desaparecidos = detectar_y_completar_co(desaparecidos, df_co_respaldo)
         
-        # Resúmenes
         resumen_activos = pd.crosstab(df_base[df_base['Status ocupación'] == 'Activo']['Categoría'], df_base[df_base['Status ocupación'] == 'Activo']['Línea'], margins=True, margins_name="Total")
         resumen_bajas = pd.crosstab(df_bajas_raw['Categoría'], df_bajas_raw['Línea'], margins=True, margins_name="Total")
         resumen_altas = pd.crosstab(df_altas_raw['Categoría'], df_altas_raw['Línea'], margins=True, margins_name="Total")
         
-        pdf_bytes = crear_pdf_reporte(f"Reporte {tipo}", f"{inicio} - {fin}", df_altas_raw, df_bajas_raw, pd.DataFrame(), resumen_altas, resumen_bajas, resumen_activos, df_desaparecidos)
-        st.download_button(f"📄 Descargar {tipo}", pdf_bytes, f"Reporte_{tipo}_{inicio}.pdf")
+        pdf_bytes = crear_pdf_reporte(f"Reporte {tipo}", f"{inicio.strftime('%d/%m/%Y')} - {fin.strftime('%d/%m/%Y')}", df_altas_raw, df_bajas_raw, pd.DataFrame(), resumen_altas, resumen_bajas, resumen_activos, df_desaparecidos)
+        st.download_button(f"📄 Descargar Reporte {tipo}", pdf_bytes, f"Reporte_{tipo}.pdf")
 
 with tabs[2]: render_periodico("Semanal")
 with tabs[3]: render_periodico("Mensual")
