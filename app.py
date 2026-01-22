@@ -64,7 +64,8 @@ class PDF(FPDF):
             df = df.replace(0, '-')
             if df.index.name: df.reset_index(inplace=True)
         
-        if self.get_y() + (8 * (len(df) + 1) + 10) > self.h - self.b_margin: self.add_page(orientation=self.cur_orientation)
+        # Verificar si el título cabe, sino nueva página
+        if self.get_y() + 20 > self.h - self.b_margin: self.add_page(orientation=self.cur_orientation)
         self.draw_section_title(title)
         
         df_formatted = df.copy()
@@ -92,8 +93,12 @@ class PDF(FPDF):
         self.set_draw_color(*COLOR_GRIS_LINEA)
         self.set_line_width(0.2)
         
+        num_filas = len(df_formatted)
         for i, (_, row) in enumerate(df_formatted.iterrows()):
-            if self.get_y() + 8 > self.h - self.b_margin:
+            # Lógica Anti-Huérfanas: Si es la penúltima fila, chequear si caben las dos que faltan
+            espacio_necesario = 16 if i == num_filas - 2 else 8
+            
+            if self.get_y() + espacio_necesario > self.h - self.b_margin:
                 self.add_page(orientation=self.cur_orientation)
                 self.set_font("Arial", "B", 8)
                 self.set_fill_color(*COLOR_FONDO_CABECERA_TABLA)
@@ -101,7 +106,7 @@ class PDF(FPDF):
                 for col in df_formatted.columns:
                     self.cell(widths[col], 8, str(col), 0, 0, "C", True)
                 self.ln()
-                self.set_text_color(*COLOR_TEXTO_CUERPO) # Fix letra blanca
+                self.set_text_color(*COLOR_TEXTO_CUERPO)
             
             fill = i % 2 == 1
             self.set_font("Arial", "B" if "Total" in str(row.iloc[0]) else "", 8)
@@ -116,14 +121,15 @@ def calcular_años(fecha_inicio, fecha_fin):
     if pd.isna(fecha_inicio) or pd.isna(fecha_fin): return 0
     return (fecha_fin - fecha_inicio).days / 365.25
 
-def generar_resumen_completo(df_datos, index_col='Categoría', columns_col='Línea'):
+def generar_resumen_completo(df_datos, index_col='Categoría', columns_col='Línea', incluir_promedios=True):
     if df_datos.empty: return pd.DataFrame()
     resumen = pd.crosstab(df_datos[index_col], df_datos[columns_col], margins=True, margins_name="Total")
-    promedios = df_datos.groupby(index_col).agg({'Antigüedad': 'mean', 'Edad': 'mean'})
-    promedios.loc['Total', 'Antigüedad'] = df_datos['Antigüedad'].mean()
-    promedios.loc['Total', 'Edad'] = df_datos['Edad'].mean()
-    resumen['Antig. Prom.'] = promedios['Antigüedad']
-    resumen['Edad Prom.'] = promedios['Edad']
+    if incluir_promedios:
+        promedios = df_datos.groupby(index_col).agg({'Antigüedad': 'mean', 'Edad': 'mean'})
+        promedios.loc['Total', 'Antigüedad'] = df_datos['Antigüedad'].mean()
+        promedios.loc['Total', 'Edad'] = df_datos['Edad'].mean()
+        resumen['Antig. Prom.'] = promedios['Antigüedad']
+        resumen['Edad Prom.'] = promedios['Edad']
     return resumen
 
 # --- 3. PROCESAMIENTO ---
@@ -189,7 +195,6 @@ def crear_pdf_reporte(titulo_reporte, rango_fechas_str, df_altas, df_bajas, res_
     pdf.draw_section_title(f"Indicadores del Período: {rango_fechas_str}")
     total_act = f"{res_activos.loc['Total', 'Total']:,}".replace(',', '.') if not res_activos.empty else "0"
     
-    # KPIs
     has_co = df_co is not None and not df_co.empty
     k_w = 65 if has_co else 80
     sp = (pdf.page_width - (k_w * (4 if has_co else 3))) / 3
@@ -200,31 +205,15 @@ def crear_pdf_reporte(titulo_reporte, rango_fechas_str, df_altas, df_bajas, res_
     if has_co: pdf.draw_kpi_box("Cambio Organizativo", str(len(df_co)), (255, 165, 0), pdf.l_margin + (k_w + sp)*3, y, width=k_w)
     
     pdf.ln(22)
-
-    # --- NUEVO ORDEN DE TABLAS ---
-    # 1. Composición Dotación Activa
     pdf.draw_table(f"Composición de la Dotación Activa", res_activos, is_crosstab=True)
-    
-    # 2. Resumen de Bajas
     pdf.draw_table(f"Resumen de Bajas (Período: {rango_fechas_str})", res_bajas, is_crosstab=True)
-    
-    # 3. Motivos por Línea y Categoría
     pdf.draw_table("Motivos de Baja por Línea", res_bajas_linea, is_crosstab=True)
     pdf.draw_table("Motivos de Baja por Categoría", res_bajas_cat, is_crosstab=True)
-    
-    # 4. Resumen de Altas
     pdf.draw_table(f"Resumen de Altas (Período: {rango_fechas_str})", res_altas, is_crosstab=True)
     
-    # 5. Detalles (Bajas -> Altas -> CO)
-    if not df_bajas.empty:
-        pdf.draw_table("Detalle de Bajas", df_bajas[['Nº pers.', 'Apellido', 'Nombre de pila', 'Motivo de Baja', 'Fecha nac.', 'Antigüedad', 'Desde', 'Línea', 'Categoría']])
-    
-    if not df_altas.empty:
-        pdf.draw_table("Detalle de Altas", df_altas[['Nº pers.', 'Apellido', 'Nombre de pila', 'Fecha nac.', 'Fecha', 'Línea', 'Categoría']])
-        
-    if has_co:
-        pdf.draw_table("Detalle Cambios Organizativos", df_co[['Nº pers.', 'Apellido', 'Nombre de pila', 'Desde', 'Línea', 'Categoría']])
-        
+    if not df_bajas.empty: pdf.draw_table("Detalle de Bajas", df_bajas[['Nº pers.', 'Apellido', 'Nombre de pila', 'Motivo de Baja', 'Fecha nac.', 'Antigüedad', 'Desde', 'Línea', 'Categoría']])
+    if not df_altas.empty: pdf.draw_table("Detalle de Altas", df_altas[['Nº pers.', 'Apellido', 'Nombre de pila', 'Fecha nac.', 'Fecha', 'Línea', 'Categoría']])
+    if has_co: pdf.draw_table("Detalle Cambios Organizativos", df_co[['Nº pers.', 'Apellido', 'Nombre de pila', 'Desde', 'Línea', 'Categoría']])
     return bytes(pdf.output())
 
 # --- 4. INTERFAZ ---
@@ -252,9 +241,8 @@ with tabs[0]:
             
             if not df_baj_r.empty: 
                 df_baj_r['Desde'] = df_baj_r['Desde'] - pd.Timedelta(days=1)
-                df_baj_r = df_baj_r.sort_values(by='Desde', ascending=True) # Viejo a Nuevo
-            if not df_alt_r.empty:
-                df_alt_r = df_alt_r.sort_values(by='Fecha', ascending=True) # Viejo a Nuevo
+                df_baj_r = df_baj_r.sort_values(by='Desde', ascending=True)
+            if not df_alt_r.empty: df_alt_r = df_alt_r.sort_values(by='Fecha', ascending=True)
 
             hoy = pd.to_datetime(datetime.now())
             df_a, df_a_v, df_b, df_b_v, df_c, df_c_v = procesar_metricas_novedades(df_alt_r, df_baj_r, df_co_raw, hoy)
@@ -263,7 +251,7 @@ with tabs[0]:
             df_act_h['Edad'] = df_act_h.apply(lambda r: calcular_años(r['Fecha nac.'], hoy), axis=1)
 
             res_act = generar_resumen_completo(df_act_h)
-            res_alt = generar_resumen_completo(df_a)
+            res_alt = generar_resumen_completo(df_a, incluir_promedios=False)
             res_baj = generar_resumen_completo(df_b)
             res_baj_linea = pd.crosstab(df_b['Motivo de Baja'], df_b['Línea'], margins=True, margins_name="Total")
             res_baj_cat = pd.crosstab(df_b['Motivo de Baja'], df_b['Categoría'], margins=True, margins_name="Total")
@@ -307,22 +295,20 @@ def render_report(report_type):
             if not df_co_f.empty: df_co_f = df_co_f.sort_values(by='Desde', ascending=True)
 
             df_a, df_a_v, df_b, df_b_v, df_c, df_c_v = procesar_metricas_novedades(df_alt_raw, df_baj_raw, df_co_f, end)
-            
             df_act_per = df_base[(df_base['Fecha'] <= end) & (df_base['Status ocupación'] == 'Activo')].copy()
             df_act_per['Antigüedad'] = df_act_per.apply(lambda r: calcular_años(r['Fecha'], end), axis=1)
             df_act_per['Edad'] = df_act_per.apply(lambda r: calcular_años(r['Fecha nac.'], end), axis=1)
 
-            res_act = generar_resumen_completo(df_act_per); res_alt = generar_resumen_completo(df_a); res_baj = generar_resumen_completo(df_b)
+            res_act = generar_resumen_completo(df_act_per)
+            res_alt = generar_resumen_completo(df_a, incluir_promedios=False)
+            res_baj = generar_resumen_completo(df_b)
             res_baj_linea = pd.crosstab(df_b['Motivo de Baja'], df_b['Línea'], margins=True, margins_name="Total")
             res_baj_cat = pd.crosstab(df_b['Motivo de Baja'], df_b['Categoría'], margins=True, margins_name="Total")
 
             titulo_pdf = f"Reporte {report_type} de Dotación"
             pdf = crear_pdf_reporte(titulo_pdf, f"{start.strftime('%d/%m/%Y')} - {end.strftime('%d/%m/%Y')}", df_a_v, df_b_v, res_alt, res_baj, res_act, res_baj_linea, res_baj_cat, df_c_v)
             
-            if report_type == 'Mensual': n_file = f"Reporte_Mensual_{start.strftime('%Y%m')}.pdf"
-            elif report_type == 'Anual': n_file = f"Reporte_Anual_{start.strftime('%Y')}.pdf"
-            else: n_file = f"Reporte_Semanal_{start.strftime('%Y%m%d')}_{end.strftime('%Y%m%d')}.pdf"
-
+            n_file = f"Reporte_{report_type}_{start.strftime('%Y%m')}.pdf" if report_type == 'Mensual' else f"Reporte_{report_type}_{start.strftime('%Y')}.pdf"
             st.download_button(f"📄 Descargar {titulo_pdf}", pdf, n_file, "application/pdf")
     else: st.info("Sube un archivo primero.")
 
