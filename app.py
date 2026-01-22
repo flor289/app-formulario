@@ -64,8 +64,7 @@ class PDF(FPDF):
             df = df.replace(0, '-')
             if df.index.name: df.reset_index(inplace=True)
         
-        # Verificar si el título cabe, sino nueva página
-        if self.get_y() + 20 > self.h - self.b_margin: self.add_page(orientation=self.cur_orientation)
+        if self.get_y() + (8 * (len(df) + 1) + 10) > self.h - self.b_margin: self.add_page(orientation=self.cur_orientation)
         self.draw_section_title(title)
         
         df_formatted = df.copy()
@@ -93,12 +92,8 @@ class PDF(FPDF):
         self.set_draw_color(*COLOR_GRIS_LINEA)
         self.set_line_width(0.2)
         
-        num_filas = len(df_formatted)
         for i, (_, row) in enumerate(df_formatted.iterrows()):
-            # Lógica Anti-Huérfanas: Si es la penúltima fila, chequear si caben las dos que faltan
-            espacio_necesario = 16 if i == num_filas - 2 else 8
-            
-            if self.get_y() + espacio_necesario > self.h - self.b_margin:
+            if self.get_y() + 8 > self.h - self.b_margin:
                 self.add_page(orientation=self.cur_orientation)
                 self.set_font("Arial", "B", 8)
                 self.set_fill_color(*COLOR_FONDO_CABECERA_TABLA)
@@ -122,14 +117,18 @@ def calcular_años(fecha_inicio, fecha_fin):
     return (fecha_fin - fecha_inicio).days / 365.25
 
 def generar_resumen_completo(df_datos, index_col='Categoría', columns_col='Línea', incluir_promedios=True):
+    """Genera tabla cruzada con opción de incluir promedios de Antigüedad y Edad."""
     if df_datos.empty: return pd.DataFrame()
+    
     resumen = pd.crosstab(df_datos[index_col], df_datos[columns_col], margins=True, margins_name="Total")
+    
     if incluir_promedios:
         promedios = df_datos.groupby(index_col).agg({'Antigüedad': 'mean', 'Edad': 'mean'})
         promedios.loc['Total', 'Antigüedad'] = df_datos['Antigüedad'].mean()
         promedios.loc['Total', 'Edad'] = df_datos['Edad'].mean()
         resumen['Antig. Prom.'] = promedios['Antigüedad']
         resumen['Edad Prom.'] = promedios['Edad']
+        
     return resumen
 
 # --- 3. PROCESAMIENTO ---
@@ -205,6 +204,7 @@ def crear_pdf_reporte(titulo_reporte, rango_fechas_str, df_altas, df_bajas, res_
     if has_co: pdf.draw_kpi_box("Cambio Organizativo", str(len(df_co)), (255, 165, 0), pdf.l_margin + (k_w + sp)*3, y, width=k_w)
     
     pdf.ln(22)
+    # ORDEN SOLICITADO
     pdf.draw_table(f"Composición de la Dotación Activa", res_activos, is_crosstab=True)
     pdf.draw_table(f"Resumen de Bajas (Período: {rango_fechas_str})", res_bajas, is_crosstab=True)
     pdf.draw_table("Motivos de Baja por Línea", res_bajas_linea, is_crosstab=True)
@@ -246,12 +246,13 @@ with tabs[0]:
 
             hoy = pd.to_datetime(datetime.now())
             df_a, df_a_v, df_b, df_b_v, df_c, df_c_v = procesar_metricas_novedades(df_alt_r, df_baj_r, df_co_raw, hoy)
+            
             df_act_h = df_base[df_base['Status ocupación'] == 'Activo'].copy()
             df_act_h['Antigüedad'] = df_act_h.apply(lambda r: calcular_años(r['Fecha'], hoy), axis=1)
             df_act_h['Edad'] = df_act_h.apply(lambda r: calcular_años(r['Fecha nac.'], hoy), axis=1)
 
             res_act = generar_resumen_completo(df_act_h)
-            res_alt = generar_resumen_completo(df_a, incluir_promedios=False)
+            res_alt = generar_resumen_completo(df_a, incluir_promedios=False) # SIN PROMEDIOS
             res_baj = generar_resumen_completo(df_b)
             res_baj_linea = pd.crosstab(df_b['Motivo de Baja'], df_b['Línea'], margins=True, margins_name="Total")
             res_baj_cat = pd.crosstab(df_b['Motivo de Baja'], df_b['Categoría'], margins=True, margins_name="Total")
@@ -300,7 +301,7 @@ def render_report(report_type):
             df_act_per['Edad'] = df_act_per.apply(lambda r: calcular_años(r['Fecha nac.'], end), axis=1)
 
             res_act = generar_resumen_completo(df_act_per)
-            res_alt = generar_resumen_completo(df_a, incluir_promedios=False)
+            res_alt = generar_resumen_completo(df_a, incluir_promedios=False) # SIN PROMEDIOS
             res_baj = generar_resumen_completo(df_b)
             res_baj_linea = pd.crosstab(df_b['Motivo de Baja'], df_b['Línea'], margins=True, margins_name="Total")
             res_baj_cat = pd.crosstab(df_b['Motivo de Baja'], df_b['Categoría'], margins=True, margins_name="Total")
