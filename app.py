@@ -230,7 +230,6 @@ with tab1:
 
             pdf_bytes_general = crear_pdf_reporte("Resumen Diario de Dotación", datetime.now().strftime('%d/%m/%Y'), df_altas_general, df_bajas_general, bajas_por_motivo_full.reset_index(), resumen_altas_full, resumen_bajas_full, resumen_activos_full, df_desaparecidos=df_desaparecidos)
             
-            # --- NOMBRE DE ARCHIVO DIARIO (OK) ---
             nombre_archivo_diario = f"Reporte_Diario_Dotacion_{datetime.now().strftime('%Y%m%d')}.pdf"
             st.download_button(label="📄 Descargar Reporte Diario (PDF)", data=pdf_bytes_general, file_name=nombre_archivo_diario, mime="application/pdf")
             
@@ -283,6 +282,16 @@ def run_period_report(report_type, df_base_main, df_activos_main):
             if start_date and end_date and start_date <= end_date:
                 rango_str = f"{start_date.strftime('%d/%m/%Y')} - {end_date.strftime('%d/%m/%Y')}"
                 df_altas_raw, df_bajas_raw = filtrar_novedades_por_fecha(df_base_period, pd.to_datetime(start_date), pd.to_datetime(end_date))
+                
+                # --- AJUSTE PARA REPORTE ANUAL (CATEGORÍA ASP.AY.C) ---
+                if report_type == 'Anual' and not df_altas_raw.empty:
+                    # Contamos cuántos necesitan normalización antes de hacerlo
+                    num_normalizados = len(df_altas_raw[df_altas_raw['Categoría'] != 'ASP.AY.C'])
+                    if num_normalizados > 0:
+                        df_altas_raw['Categoría'] = 'ASP.AY.C'
+                        st.info(f"💡 Info de App: Se normalizaron **{num_normalizados}** registros de Altas a la categoría 'ASP.AY.C' para este reporte anual.")
+                # ------------------------------------------------------
+
                 activos_viejos = set(df_activos_period_raw['Nº pers.']); todos_nuevos = set(df_base_period['Nº pers.'])
                 legajos_desaparecidos = activos_viejos - todos_nuevos
                 df_desaparecidos_raw = df_activos_period_raw[df_activos_period_raw['Nº pers.'].isin(legajos_desaparecidos)].copy()
@@ -296,7 +305,6 @@ def run_period_report(report_type, df_base_main, df_activos_main):
                 
                 pdf_bytes = crear_pdf_reporte(f"Resumen {report_type} de Dotación", rango_str, df_altas, df_bajas, bajas_motivo.reset_index(), resumen_altas, resumen_bajas, resumen_activos, df_desaparecidos)
                 
-                # --- LÓGICA DE NOMBRES DE ARCHIVO MEJORADA ---
                 if report_type == 'Mensual':
                     nombre_archivo = f"Reporte_Mensual_{start_date.strftime('%Y%m')}.pdf"
                 elif report_type == 'Anual':
