@@ -4,7 +4,7 @@ from fpdf import FPDF
 from datetime import datetime, timedelta
 import io
 
-# --- DEFINICIÓN DE LA PALETA DE COLORES (Se mantiene igual) ---
+# --- DEFINICIÓN DE LA PALETA DE COLORES ---
 COLOR_AZUL_INSTITUCIONAL = (4, 118, 208)
 COLOR_FONDO_CABECERA_TABLA = (70, 130, 180)
 COLOR_GRIS_FONDO_FILA = (240, 242, 246)
@@ -138,7 +138,6 @@ def crear_pdf_reporte(titulo_reporte, rango_fechas_str, df_altas, df_bajas, baja
             pdf.draw_table("Cambios Organizacionales (Legajos no encontrados)", df_desaparecidos[['Nº pers.']])
     return bytes(pdf.output())
 
-# --- FUNCIONES DE PROCESAMIENTO (Se mantienen igual) ---
 def procesar_archivo_base(archivo_cargado, sheet_name='BaseQuery'):
     df_base = pd.read_excel(archivo_cargado, sheet_name=sheet_name, engine='openpyxl')
     df_base.rename(columns={'Gr.prof.': 'Categoría', 'División de personal': 'Línea'}, inplace=True)
@@ -200,7 +199,6 @@ st.set_page_config(page_title="Dashboard de Dotación", layout="wide")
 st.markdown("""<style>.main .block-container { padding-top: 2rem; padding-bottom: 2rem; background-color: #f0f2f6; } h1, h2, h3 { color: #003366; } div.stDownloadButton > button { background-color: #28a745; color: white; border-radius: 5px; font-weight: bold; }</style>""", unsafe_allow_html=True)
 st.title("📊 Dashboard de Control de Dotación")
 
-# --- PASO 1: RENOMBRE DE PESTAÑAS ---
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["📅 Reporte Diario", "📈 Resúmenes (General)", "📅 Reporte Semanal", "📅 Reporte Mensual", "📅 Reporte Anual"])
 
 with tab1:
@@ -230,9 +228,12 @@ with tab1:
             bajas_por_motivo_full = df_bajas_general_raw['Motivo de la medida'].value_counts().to_frame('Cantidad')
             if not bajas_por_motivo_full.empty: bajas_por_motivo_full.loc['Total'] = bajas_por_motivo_full.sum()
 
-            # --- PASO 2: CAMBIO DE TÍTULO DIARIO ---
             pdf_bytes_general = crear_pdf_reporte("Resumen Diario de Dotación", datetime.now().strftime('%d/%m/%Y'), df_altas_general, df_bajas_general, bajas_por_motivo_full.reset_index(), resumen_altas_full, resumen_bajas_full, resumen_activos_full, df_desaparecidos=df_desaparecidos)
-            st.download_button(label="📄 Descargar Reporte Diario (PDF)", data=pdf_bytes_general, file_name=f"Reporte_Diario_Dotacion_{datetime.now().strftime('%Y%m%d')}.pdf", mime="application/pdf")
+            
+            # --- NOMBRE DE ARCHIVO DIARIO (OK) ---
+            nombre_archivo_diario = f"Reporte_Diario_Dotacion_{datetime.now().strftime('%Y%m%d')}.pdf"
+            st.download_button(label="📄 Descargar Reporte Diario (PDF)", data=pdf_bytes_general, file_name=nombre_archivo_diario, mime="application/pdf")
+            
             st.markdown("---")
             st.subheader(f"Altas ({len(df_altas_general)})"); st.dataframe(df_altas_general, hide_index=True)
             st.subheader(f"Bajas ({len(df_bajas_general)})"); st.dataframe(df_bajas_general, hide_index=True)
@@ -269,7 +270,6 @@ def run_period_report(report_type, df_base_main, df_activos_main):
             df_activos_period_raw = pd.read_excel(archivo_para_periodo, sheet_name='Activos')
             today = datetime.now()
             
-            # --- PASO 3: LÓGICA DE FECHAS SEGÚN TIPO ---
             if report_type == 'Semanal':
                 dflt_start = today - timedelta(days=7); dflt_end = today
             elif report_type == 'Mensual':
@@ -294,9 +294,19 @@ def run_period_report(report_type, df_base_main, df_activos_main):
                 bajas_motivo = df_bajas_raw['Motivo de la medida'].value_counts().to_frame('Cantidad')
                 if not bajas_motivo.empty: bajas_motivo.loc['Total'] = bajas_motivo.sum()
                 
-                # --- PASO 4: TÍTULO DINÁMICO EN PDF ---
                 pdf_bytes = crear_pdf_reporte(f"Resumen {report_type} de Dotación", rango_str, df_altas, df_bajas, bajas_motivo.reset_index(), resumen_altas, resumen_bajas, resumen_activos, df_desaparecidos)
-                st.download_button(f"📄 Descargar Reporte {report_type} en PDF", pdf_bytes, f"Reporte_{report_type}_{start_date.strftime('%Y%m')}.pdf", "application/pdf", key=f"btn_{report_type}")
+                
+                # --- LÓGICA DE NOMBRES DE ARCHIVO MEJORADA ---
+                if report_type == 'Mensual':
+                    nombre_archivo = f"Reporte_Mensual_{start_date.strftime('%Y%m')}.pdf"
+                elif report_type == 'Anual':
+                    nombre_archivo = f"Reporte_Anual_{start_date.strftime('%Y')}.pdf"
+                elif report_type == 'Semanal':
+                    nombre_archivo = f"Reporte_Semanal_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}.pdf"
+                else:
+                    nombre_archivo = f"Reporte_{report_type}.pdf"
+
+                st.download_button(f"📄 Descargar Reporte {report_type} en PDF", pdf_bytes, nombre_archivo, "application/pdf", key=f"btn_{report_type}")
         except Exception as e:
             st.error(f"Error: {e}")
 
@@ -304,7 +314,5 @@ with tab3:
     run_period_report('Semanal', st.session_state.get('df_base_general'), st.session_state.get('df_activos_general_raw'))
 with tab4:
     run_period_report('Mensual', st.session_state.get('df_base_general'), st.session_state.get('df_activos_general_raw'))
-# --- PASO 5: LLAMADA A LA PESTAÑA ANUAL ---
 with tab5:
     run_period_report('Anual', st.session_state.get('df_base_general'), st.session_state.get('df_activos_general_raw'))
-
